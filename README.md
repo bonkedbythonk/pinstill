@@ -35,11 +35,22 @@ It lives in the menu bar. Open it after you've saved some pins, let it sync, qui
 
 ## Install
 
-You need macOS 15 or later, and [Upscayl](https://upscayl.org) (free) for the upscaling.
+You need macOS 15 or later. Paste this into Terminal:
 
-1. Download `Pinwall.zip` from [Releases](https://github.com/bonkedbythonk/pinwall/releases) and move Pinwall to Applications.
-2. It isn't notarized, so macOS blocks the first launch. Open it once, then go to System Settings > Privacy & Security and click **Open Anyway**. Or run `xattr -dr com.apple.quarantine /Applications/Pinwall.app`.
-3. The setup window takes it from there: Upscayl, your Pinterest login, a folder and a board.
+```bash
+curl -fsSL https://raw.githubusercontent.com/bonkedbythonk/pinwall/main/Scripts/install.sh | bash
+```
+
+Run the same line again to update. Pinwall also tells you when a new version is out.
+
+For the upscaling, install [Upscayl](https://upscayl.org) (free) too. The setup window walks you through the rest: your Pinterest login, a folder and a board.
+
+<details>
+<summary>Installing by hand</summary>
+
+Download `Pinwall.zip` from [Releases](https://github.com/bonkedbythonk/pinwall/releases) and move Pinwall to Applications. It isn't notarized, so macOS blocks the first launch: open it once, then go to System Settings > Privacy & Security and click **Open Anyway**. Or run `xattr -dr com.apple.quarantine /Applications/Pinwall.app`.
+
+</details>
 
 ## How it gets your pins
 
@@ -58,6 +69,6 @@ swift test
 Scripts/compile_and_run.sh
 ```
 
-`swift Scripts/make_icon.swift` redraws the icon. `Pinwall.app/Contents/MacOS/Pinwall --snapshot <folder>` renders every screen with made-up data, which is where the screenshots above come from.
+`swift Scripts/make_icon.swift` redraws the icon. `Pinwall.app/Contents/MacOS/Pinwall --profile test` runs a separate copy with its own settings, login and folder, for trying first run (add `--no-upscayl` to act as if Upscayl isn't installed). `Pinwall.app/Contents/MacOS/Pinwall --snapshot <folder>` renders every screen with made-up data, which is where the screenshots above come from.
 
 Licensed under [GPLv3](LICENSE).

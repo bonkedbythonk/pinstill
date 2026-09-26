@@ -239,6 +239,7 @@ private struct AboutView: View {
                 .foregroundStyle(.secondary)
             Text("Pinterest boards, as wallpapers.")
                 .multilineTextAlignment(.center)
+            UpdateRow()
             HStack {
                 Link("GitHub", destination: Self.repo)
                 Text("·").foregroundStyle(.secondary)
@@ -262,5 +263,33 @@ private extension View {
         foregroundStyle(.secondary)
             .multilineTextAlignment(.leading)
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct UpdateRow: View {
+    @Environment(AppModel.self) private var model
+    @State private var checking = false
+    @State private var checked = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if let update = model.availableUpdate {
+                Text("Version \(update.version) is out.")
+                Link("Download", destination: update.page)
+            } else if checked {
+                Text("You have the latest version.").foregroundStyle(.secondary)
+            } else {
+                Button(checking ? "Checking…" : "Check for updates") {
+                    checking = true
+                    Task {
+                        await model.checkForUpdate(force: true)
+                        checking = false
+                        checked = true
+                    }
+                }
+                .disabled(checking)
+            }
+        }
+        .font(.callout)
     }
 }

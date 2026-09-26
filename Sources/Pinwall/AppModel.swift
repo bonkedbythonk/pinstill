@@ -3,6 +3,7 @@ import Foundation
 import Observation
 import os
 import PinwallCore
+import CryptoKit
 import ServiceManagement
 
 /// A finished wallpaper in the output folder (from a pin or one of the user's own images).
@@ -46,10 +47,22 @@ final class AppModel {
     private(set) var skippedPins: [PinRecord] = []
     private(set) var lastSync: Date?
     private(set) var lastResult: String?
-    private(set) var errorMessage: String?
+    private(set) var errorMessage: String? {
+        didSet { errorLink = nil }
+    }
+    /// Where to go about `errorMessage`, when there's somewhere useful (the issue tracker).
+    private(set) var errorLink: URL?
     /// Set when a freshly linked board already has pins: ask before importing them all.
     private(set) var pendingImport: [Pin]?
+
+    /// Board still waiting for that answer. Persisted: quitting before answering used to
+    /// import the whole board on the next launch without asking.
+    private var awaitingImportDecision: String? {
+        didSet { defaults.set(awaitingImportDecision, forKey: "awaitingImportDecision") }
+    }
     private(set) var upscaler: Upscaler?
+    /// A newer release on GitHub, if the last check found one.
+    private(set) var availableUpdate: UpdateCheck.Release?
     private(set) var target: PixelSize
 
     // MARK: Settings
@@ -159,30 +172,48 @@ final class AppModel {
     /// Upper bound on pages fetched per sync (25 pins each).
     private let maxPages = 10
 
-    static let supportFolder = URL.applicationSupportDirectory.appending(path: "Pinwall")
+    nonisolated static let supportFolder = URL.applicationSupportDirectory.appending(path: "Pinwall")
     static let defaultOutputFolder = URL.picturesDirectory.appending(path: "Pinwall", directoryHint: .isDirectory)
 
+    /// A separate Pinwall for testing first run: own settings, library, Pinterest login and
+    /// wallpaper folder. `Pinwall --profile <name> [--no-upscayl]`; not shown in the UI.
+    struct Profile {
+        let name: String
+        let hideUpscayl: Bool
+
+        var defaults: UserDefaults { UserDefaults(suiteName: "io.github.bonkedbythonk.pinwall.profile.\(name)")! }
+        var folder: URL { AppModel.supportFolder.appending(path: "Profiles/\(name)") }
+    }
+
+    let profile: Profile?
+
+    convenience init(profile: Profile) {
+        self.init(defaults: profile.defaults, libraryFile: profile.folder.appending(path: "library.json"),
+                  session: PinterestSession(dataStore: .init(forIdentifier: profile.dataStoreID)),
+                  profile: profile)
+    }
+
     init(defaults: UserDefaults = .standard, libraryFile: URL = AppModel.supportFolder.appending(path: "library.json"),
-         demo: Bool = false) {
+         demo: Bool = false, session: PinterestSession = PinterestSession(), profile: Profile? = nil) {
         self.defaults = defaults
         isDemo = demo
-        session = PinterestSession()
+        self.session = session
+        self.profile = profile
         library = Library(file: libraryFile)
         outputFolder = defaults.string(forKey: "outputFolder").map { URL(filePath: $0, directoryHint: .isDirectory) }
-            ?? Self.defaultOutputFolder
+            ?? (profile.map { $0.folder.appending(path: "Wallpapers", directoryHint: .isDirectory) } ?? Self.defaultOutputFolder)
         board = Self.load(Board.self, key: "board", from: defaults)
         fitOwnImages = defaults.object(forKey: "fitOwnImages") as? Bool ?? false
         upscaleModel = Self.load(UpscaleModel.self, key: "upscaleModel", from: defaults) ?? .automatic
-        // Existing installs (board already linked) skip the setup window.
-        hasCompletedSetup = defaults.object(forKey: "hasCompletedSetup") as? Bool
-            ?? (defaults.data(forKey: "board") != nil)
+        hasCompletedSetup = defaults.bool(forKey: "hasCompletedSetup")
         pinnedWallpaper = defaults.string(forKey: "pinnedWallpaper").map { URL(filePath: $0) }
+        awaitingImportDecision = defaults.string(forKey: "awaitingImportDecision")
         rotationMode = Self.load(RotationMode.self, key: "rotationMode", from: defaults) ?? .macOS
         macInterval = Self.load(ShuffleInterval.self, key: "macInterval", from: defaults)
         macRandomly = defaults.object(forKey: "macRandomly") as? Bool
         pinwallInterval = defaults.object(forKey: "pinwallInterval") as? Double ?? 15 * 60
         pinwallOrder = Self.load(RotationOrder.self, key: "pinwallOrder", from: defaults) ?? .random
-        upscaler = Upscaler.locate()
+        upscaler = profile?.hideUpscayl == true ? nil : Upscaler.locate()
         target = Screens.largestPixelSize()
         if !demo {
             session.onNavigationFinished = { [weak self] url in
@@ -202,6 +233,7 @@ final class AppModel {
     /// Launch and menu open: check login, then sync if a board is linked.
     func refresh() async {
         guard !isDemo else { return }
+        Task { await checkForUpdate() }
         log.info("refresh requested (busy: \(self.isBusy))")
         target = Screens.largestPixelSize()
         reloadWallpapers()
@@ -224,7 +256,7 @@ final class AppModel {
             }
             errorMessage = nil
         } catch {
-            errorMessage = "Can't reach Pinterest: \(error)"
+            report(error)
             log.error("account check failed: \(String(describing: error), privacy: .public)")
         }
     }
@@ -236,7 +268,7 @@ final class AppModel {
             log.info("loaded \(self.boards.count) boards")
             if let board, let fresh = boards.first(where: { $0.id == board.id }), fresh != board { self.board = fresh }
         } catch {
-            errorMessage = "Couldn't load boards: \(error)"
+            report(error)
         }
     }
 
@@ -247,7 +279,7 @@ final class AppModel {
     }
 
     func refreshUpscaler() {
-        upscaler = Upscaler.locate()
+        upscaler = profile?.hideUpscayl == true ? nil : Upscaler.locate()
     }
 
     /// Login page navigations: once Pinterest leaves the login page, check whether we're in.
@@ -262,12 +294,20 @@ final class AppModel {
     func choose(_ board: Board) async {
         guard self.board?.id != board.id else { return }
         self.board = board
+        awaitingImportDecision = board.id
+        await sync(linking: true)
+    }
+
+    /// Brings back the "import existing pins?" question for a board that never got an answer.
+    func resumePendingImport() async {
+        guard let board, awaitingImportDecision == board.id, pendingImport == nil else { return }
         await sync(linking: true)
     }
 
     func importExisting(_ include: Bool) async {
         guard let pins = pendingImport else { return }
         pendingImport = nil
+        awaitingImportDecision = nil
         if include {
             lastResult = await process(pins).joined(separator: " · ")
         } else {
@@ -282,6 +322,7 @@ final class AppModel {
 
     func sync(linking: Bool = false) async {
         guard !isDemo, !isBusy, let board else { return }
+        let linking = linking || awaitingImportDecision == board.id
         activity = .checking
         errorMessage = nil
         defer { if activity == .checking { activity = .idle } }
@@ -312,15 +353,19 @@ final class AppModel {
                 activity = .idle
                 return
             }
+            if linking { awaitingImportDecision = nil } // empty board: nothing to decide
             var summary = fresh.isEmpty ? [] : await process(fresh)
             if fitOwnImages { summary += await fitLocalImages() }
             lastResult = summary.isEmpty ? "Up to date" : summary.joined(separator: " · ")
             activity = .idle
         } catch SessionError.http(let status, _) where status == 401 || status == 403 {
-            account = .loggedOut
+            // Also what Pinterest answers when its request format changes, so tell the two
+            // apart by whether the account check itself still works.
             activity = .idle
+            await checkAccount()
+            if case .loggedIn = account { report(error: SessionError.http(status, resource: "board")) }
         } catch {
-            errorMessage = "Sync failed: \(error)"
+            report(error)
             activity = .idle
         }
         reloadWallpapers()
@@ -624,6 +669,49 @@ final class AppModel {
         if panel.runModal() == .OK, let url = panel.url { outputFolder = url }
     }
 
+    // MARK: Updates
+
+    static var currentVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
+    }
+
+    /// At most once a day unless `force`d (the button in About).
+    func checkForUpdate(force: Bool = false) async {
+        guard !isDemo else { return }
+        let last = defaults.object(forKey: "lastUpdateCheck") as? Date ?? .distantPast
+        guard force || Date.now.timeIntervalSince(last) > 24 * 3600 else { return }
+        defaults.set(Date.now, forKey: "lastUpdateCheck")
+        guard let latest = try? await UpdateCheck.latest() else { return }
+        availableUpdate = UpdateCheck.isNewer(latest.version, than: Self.currentVersion) ? latest : nil
+    }
+
+    // MARK: Errors
+
+    static let issuesURL = URL(string: "https://github.com/bonkedbythonk/pinwall/issues")!
+
+    /// Turns an error into something a person can act on.
+    private func report(_ error: Error) { report(error: error) }
+
+    private func report(error: Error) {
+        log.error("\(String(describing: error), privacy: .public)")
+        switch error {
+        case let error as URLError where [.notConnectedToInternet, .networkConnectionLost, .timedOut,
+                                          .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed].contains(error.code):
+            errorMessage = "Can't reach Pinterest. Check your internet connection and try again."
+        case is SessionError, is PinterestAPIError, is DecodingError:
+            errorMessage = "Pinterest changed something on their end, so Pinwall can't read your board right now. An update to Pinwall will fix it."
+            errorLink = Self.issuesURL
+        default:
+            if (error as NSError).domain == "WKErrorDomain" {
+                // fetch() inside the page failing: offline, or Pinterest refusing the request.
+                errorMessage = "Couldn't get your board from Pinterest. If you're online, Pinterest may have changed something."
+                errorLink = Self.issuesURL
+            } else {
+                errorMessage = "Something went wrong: \(error.localizedDescription)"
+            }
+        }
+    }
+
     // MARK: Persistence
 
     private func store<T: Encodable>(_ value: T?, key: String) {
@@ -647,5 +735,14 @@ final class AppModel {
         self.lastResult = lastResult
         self.lastSync = .now.addingTimeInterval(-120)
         self.pendingImport = pendingImport
+    }
+}
+
+extension AppModel.Profile {
+    /// Stable per profile, so its Pinterest login survives relaunches.
+    var dataStoreID: UUID {
+        let bytes = Array(SHA256.hash(data: Data(name.utf8)))
+        return UUID(uuid: (bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+                           bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]))
     }
 }

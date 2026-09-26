@@ -5,3 +5,4 @@ out/
 .DS_Store
 Pinwall.app/
 PLAN.md
+build/

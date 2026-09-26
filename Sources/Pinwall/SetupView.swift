@@ -64,7 +64,7 @@ struct SetupView: View {
         .padding(.horizontal, 40)
         .padding(.top, 34)
         .padding(.bottom, 22)
-        .frame(width: 600, height: 540)
+        .frame(width: 600, height: 620)
     }
 
     /// One pin per step: pinned for done and current, an empty hole for what's left.
@@ -107,12 +107,12 @@ struct SetupView: View {
         Group {
             if let username = model.account.username {
                 Rows {
-                    Row(label: "Logged in", text: "as \(username). The login stays in Pinwall's own storage on this Mac.")
+                    Row(label: "Account", text: "Logged in as \(username). The login stays in Pinwall's own storage on this Mac.")
                 }
             } else {
                 VStack(alignment: .leading, spacing: 8) {
                     WebViewHost(webView: model.session.webView)
-                        .frame(height: 250)
+                        .frame(height: 330)
                         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Theme.hairline))
                         .loginWatcher { }
@@ -232,7 +232,13 @@ struct SetupView: View {
     private func move(_ delta: Int) {
         guard let next = Step(rawValue: step.rawValue + delta) else { return }
         withAnimation(.easeInOut(duration: 0.2)) { step = next }
-        if next == .pinterest || next == .board { Task { await model.checkAccount() } }
+        if next == .pinterest { Task { await model.checkAccount() } }
+        if next == .board {
+            Task {
+                await model.checkAccount()
+                await model.resumePendingImport()
+            }
+        }
     }
 }
 

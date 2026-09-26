@@ -16,11 +16,16 @@ struct MenuView: View {
                 .padding(16)
             if let error = model.errorMessage {
                 Hairline()
-                Text(error)
-                    .font(.callout)
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(16)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(error)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let link = model.errorLink {
+                        Link("Check for a fix or report it", destination: link)
+                    }
+                }
+                .font(.callout)
+                .padding(16)
             }
         }
         .frame(width: 360)
@@ -127,6 +132,10 @@ private struct Wall: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             StatusLine()
+            if let update = model.availableUpdate {
+                Notice(text: "Pinwall \(update.version) is out.",
+                       action: ("Get it", { NSWorkspace.shared.open(update.page) }))
+            }
             if model.rotationMode == .macOS, model.pinnedWallpaper != nil {
                 Notice(text: "Rotation is paused on this desktop.", action: ("Resume", model.resumeRotation))
             }

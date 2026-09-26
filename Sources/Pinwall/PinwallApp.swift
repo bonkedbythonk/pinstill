@@ -30,7 +30,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             return
         }
 
-        model = AppModel()
+        if let index = arguments.firstIndex(of: "--profile"), index + 1 < arguments.count {
+            model = AppModel(profile: .init(name: arguments[index + 1], hideUpscayl: arguments.contains("--no-upscayl")))
+        } else {
+            model = AppModel()
+        }
         model.presentLogin = { [weak self] in self?.showLogin() }
         model.presentSetup = { [weak self] in self?.showSetup() }
         model.presentSettings = { [weak self] in self?.showSettings() }
