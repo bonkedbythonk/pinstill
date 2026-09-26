@@ -1,0 +1,7 @@
+.build/
+.swiftpm/
+out/
+*.xcodeproj
+.DS_Store
+Pinwall.app/
+PLAN.md

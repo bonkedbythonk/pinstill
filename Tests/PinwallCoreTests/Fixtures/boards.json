@@ -1,0 +1,5 @@
+{"resource_response":{"status":"success","data":[
+{"id":"200000000000000001","name":"Pinwall","privacy":"secret","url":"/example_user/pinwall/","pin_count":0,"type":"board"},
+{"id":"200000000000000002","name":"Desk wallpapers","privacy":"secret","url":"/example_user/desk-wallpapers/","pin_count":55,"type":"board"},
+{"id":"200000000000000003","name":"Travel","privacy":"public","url":"/example_user/travel/","pin_count":6,"type":"board"}
+]}}
