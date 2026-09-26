@@ -2,7 +2,7 @@ import PinwallCore
 import SwiftUI
 
 struct SettingsView: View {
-    enum Tab: Hashable { case general, pinterest, upscaling, about }
+    enum Tab: Hashable { case general, rotation, pinterest, upscaling, about }
 
     @State var tab: Tab = .general
 
@@ -11,6 +11,9 @@ struct SettingsView: View {
             GeneralSettings()
                 .tabItem { Label("General", systemImage: "gearshape") }
                 .tag(Tab.general)
+            RotationSettings()
+                .tabItem { Label("Rotation", systemImage: "arrow.2.squarepath") }
+                .tag(Tab.rotation)
             PinterestSettings()
                 .tabItem { Label("Pinterest", systemImage: "pin") }
                 .tag(Tab.pinterest)
@@ -51,8 +54,8 @@ private struct GeneralSettings: View {
                     }
                 }
             } footer: {
-                Text("Wallpapers are made at \(model.target.width)×\(model.target.height), the size of this Mac's largest display. How often macOS switches between them is up to Wallpaper settings.")
-                    .foregroundStyle(.secondary)
+                Text("Wallpapers are made at \(model.target.width)×\(model.target.height), the size of this Mac's largest display. How often they change is under Rotation.")
+                    .settingsFooter()
             }
             Section {
                 Toggle(isOn: $model.fitOwnImages) {
@@ -63,6 +66,68 @@ private struct GeneralSettings: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+private struct RotationSettings: View {
+    @Environment(AppModel.self) private var model
+
+    static let pinwallIntervals: [(String, TimeInterval)] = [
+        ("Every minute", 60), ("Every 5 minutes", 300), ("Every 15 minutes", 900),
+        ("Every 30 minutes", 1800), ("Every hour", 3600), ("Every 3 hours", 10800), ("Every day", 86400),
+    ]
+
+    var body: some View {
+        @Bindable var model = model
+        Form {
+            Section {
+                Picker("Who switches wallpapers", selection: $model.rotationMode) {
+                    Text("macOS").tag(AppModel.RotationMode.macOS)
+                    Text("Pinwall").tag(AppModel.RotationMode.pinwall)
+                }
+                .pickerStyle(.segmented)
+            } footer: {
+                Text(model.rotationMode == .macOS
+                     ? "macOS rotates through the folder by itself, so Pinwall can be closed."
+                     : "Pinwall picks the next wallpaper itself. It has to stay open in the menu bar for that, so turn on Open Pinwall when I log in in General.")
+                    .settingsFooter()
+            }
+
+            if model.rotationMode == .macOS {
+                Section {
+                    Picker("Change wallpaper", selection: Binding(
+                        get: { model.macInterval ?? .every30Minutes },
+                        set: { model.macInterval = $0; Task { await model.applyMacRotation() } })) {
+                        ForEach(ShuffleInterval.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }
+                    Toggle("In random order", isOn: Binding(
+                        get: { model.macRandomly ?? true },
+                        set: { model.macRandomly = $0; Task { await model.applyMacRotation() } }))
+                } footer: {
+                    Text("These are the same settings as System Settings, Wallpaper, for desktops that use this folder. macOS has no public way to change them, so Pinwall edits its settings file and restarts the wallpaper process; your desktop may blink once. A macOS update could stop this from working.")
+                        .settingsFooter()
+                }
+            } else {
+                Section {
+                    Picker("Change wallpaper", selection: $model.pinwallInterval) {
+                        ForEach(Self.pinwallIntervals, id: \.1) { Text($0.0).tag($0.1) }
+                    }
+                    Picker("Order", selection: $model.pinwallOrder) {
+                        Text("Random").tag(AppModel.RotationOrder.random)
+                        Text("Newest first").tag(AppModel.RotationOrder.newestFirst)
+                    }
+                    LabeledContent("Now") {
+                        Button("Next wallpaper") { model.nextWallpaper() }
+                            .disabled(model.wallpapers.isEmpty)
+                    }
+                } footer: {
+                    Text("Every desktop gets the current wallpaper when you switch to it.")
+                        .settingsFooter()
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear { model.loadMacRotation() }
     }
 }
 
@@ -101,7 +166,7 @@ private struct PinterestSettings: View {
                     }
                 } footer: {
                     Text("Pins saved to this board become wallpapers the next time Pinwall syncs.")
-                        .foregroundStyle(.secondary)
+                        .settingsFooter()
                 }
             }
         }
@@ -142,7 +207,7 @@ private struct UpscalingSettings: View {
                 .disabled(model.upscaler == nil)
             } footer: {
                 Text("Automatic looks at each image: Digital art for anime, drawings and graphic art, High fidelity for photos like landscapes and cities.")
-                    .foregroundStyle(.secondary)
+                    .settingsFooter()
             }
             Section {
                 LabeledContent("Redo all wallpapers") {
@@ -151,7 +216,7 @@ private struct UpscalingSettings: View {
                 }
             } footer: {
                 Text("Makes every wallpaper again from its original, for example after changing the model or moving to a bigger display. Wallpapers you removed stay removed.")
-                    .foregroundStyle(.secondary)
+                    .settingsFooter()
             }
         }
         .formStyle(.grouped)
@@ -188,5 +253,14 @@ private struct AboutView: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity)
+    }
+}
+
+private extension View {
+    /// Grouped-form footers centre or right-align multi-line text; keep it reading left to right.
+    func settingsFooter() -> some View {
+        foregroundStyle(.secondary)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

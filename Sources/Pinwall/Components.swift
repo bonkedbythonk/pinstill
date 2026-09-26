@@ -64,7 +64,7 @@ struct WallpaperPrint: View {
     @Environment(AppModel.self) private var model
     @State private var hovering = false
 
-    private var isOnDesktop: Bool { model.pinnedWallpaper == wallpaper.url }
+    private var isOnDesktop: Bool { model.desktopWallpaper == wallpaper.url }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {

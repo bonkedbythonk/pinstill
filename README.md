@@ -22,6 +22,7 @@
 - Upscales pins that are too small with [Upscayl](https://upscayl.org), using its Digital art model for anime and illustrations and High fidelity for photos.
 - Puts the results in a folder your Mac rotates through, on every desktop.
 - Lets you set one as your wallpaper right away, or remove it.
+- Sets how often they change, from every 5 seconds to once a day. macOS can keep rotating with Pinwall closed, or Pinwall can do it (any interval, newest first, a next button) while it's open.
 
 It lives in the menu bar. Open it after you've saved some pins, let it sync, quit it again.
 

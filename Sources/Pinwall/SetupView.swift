@@ -141,7 +141,7 @@ struct SetupView: View {
 
             Toggle(isOn: $useAsDesktopWallpaper) {
                 Text("Make it my desktop wallpaper")
-                Text("Rotates through the folder. How often is set in System Settings, Wallpaper.")
+                Text("Rotates through the folder. How often is up to you, in Pinwall's settings.")
             }
             Toggle(isOn: $model.fitOwnImages) {
                 Text("Fit images I put in the folder myself, too")

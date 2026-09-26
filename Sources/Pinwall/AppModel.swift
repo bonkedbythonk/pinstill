@@ -84,6 +84,43 @@ final class AppModel {
         didSet { defaults.set(pinnedWallpaper?.path(percentEncoded: false), forKey: "pinnedWallpaper") }
     }
 
+    /// Who rotates the wallpapers: macOS (works with Pinwall closed) or Pinwall (more control,
+    /// has to stay open).
+    var rotationMode: RotationMode {
+        didSet {
+            guard rotationMode != oldValue else { return }
+            store(rotationMode, key: "rotationMode")
+            rotationModeChanged()
+        }
+    }
+
+    /// macOS mode: how often macOS switches. nil until read from macOS or chosen.
+    var macInterval: ShuffleInterval? {
+        didSet { store(macInterval, key: "macInterval") }
+    }
+
+    var macRandomly: Bool? {
+        didSet { defaults.set(macRandomly, forKey: "macRandomly") }
+    }
+
+    /// Pinwall mode: seconds between wallpapers, and in which order.
+    var pinwallInterval: TimeInterval {
+        didSet {
+            defaults.set(pinwallInterval, forKey: "pinwallInterval")
+            scheduleRotation()
+        }
+    }
+
+    var pinwallOrder: RotationOrder {
+        didSet { store(pinwallOrder, key: "pinwallOrder") }
+    }
+
+    /// Pinwall mode: what's showing and when it changes.
+    private(set) var currentWallpaper: URL?
+    private(set) var nextChange: Date?
+    @ObservationIgnored private var rotationTimer: Timer?
+    @ObservationIgnored private var spaceObserver: NSObjectProtocol?
+
     var hasCompletedSetup: Bool {
         didSet { defaults.set(hasCompletedSetup, forKey: "hasCompletedSetup") }
     }
@@ -140,6 +177,11 @@ final class AppModel {
         hasCompletedSetup = defaults.object(forKey: "hasCompletedSetup") as? Bool
             ?? (defaults.data(forKey: "board") != nil)
         pinnedWallpaper = defaults.string(forKey: "pinnedWallpaper").map { URL(filePath: $0) }
+        rotationMode = Self.load(RotationMode.self, key: "rotationMode", from: defaults) ?? .macOS
+        macInterval = Self.load(ShuffleInterval.self, key: "macInterval", from: defaults)
+        macRandomly = defaults.object(forKey: "macRandomly") as? Bool
+        pinwallInterval = defaults.object(forKey: "pinwallInterval") as? Double ?? 15 * 60
+        pinwallOrder = Self.load(RotationOrder.self, key: "pinwallOrder", from: defaults) ?? .random
         upscaler = Upscaler.locate()
         target = Screens.largestPixelSize()
         if !demo {
@@ -147,6 +189,8 @@ final class AppModel {
                 Task { await self?.navigationFinished(url) }
             }
             reloadWallpapers()
+            if macInterval == nil { loadMacRotation() }
+            if rotationMode == .pinwall { startRotation() }
         }
     }
 
@@ -405,7 +449,8 @@ final class AppModel {
 
     /// Moves a wallpaper to the Trash. Its pin stays "seen", so it isn't downloaded again.
     func trash(_ wallpaper: Wallpaper) {
-        if wallpaper.url == pinnedWallpaper { resumeRotation() }
+        if rotationMode == .macOS, wallpaper.url == pinnedWallpaper { resumeRotation() }
+        if rotationMode == .pinwall, wallpaper.url == currentWallpaper { nextWallpaper() }
         if isDemo {
             wallpapers.removeAll { $0.url == wallpaper.url }
             return
@@ -415,25 +460,32 @@ final class AppModel {
         }
     }
 
-    /// Shows one wallpaper right now. macOS then stops rotating on the current desktop (Space)
-    /// until `resumeRotation()`.
+    // MARK: Rotation
+
+    enum RotationMode: String, Codable { case macOS, pinwall }
+    enum RotationOrder: String, Codable, CaseIterable { case random, newestFirst }
+
+    /// The wallpaper showing on the desktop right now, when Pinwall knows it.
+    var desktopWallpaper: URL? { rotationMode == .pinwall ? currentWallpaper : pinnedWallpaper }
+
+    /// Shows one wallpaper right now. In macOS mode that pauses macOS's rotation on the current
+    /// desktop until `resumeRotation()`; in Pinwall mode rotation carries on from it.
     func setAsDesktop(_ wallpaper: Wallpaper) {
-        guard !isDemo else { pinnedWallpaper = wallpaper.url; return }
-        do {
-            for screen in NSScreen.screens {
-                try NSWorkspace.shared.setDesktopImageURL(wallpaper.url, for: screen, options: [:])
-            }
-            pinnedWallpaper = wallpaper.url
-        } catch {
-            errorMessage = "Couldn't set the wallpaper: \(error.localizedDescription)"
+        if rotationMode == .pinwall {
+            show(wallpaper.url)
+            scheduleRotation()
+            return
         }
+        guard show(wallpaper.url) else { return }
+        pinnedWallpaper = wallpaper.url
     }
 
     func resumeRotation() {
         useFolderAsDesktopWallpaper()
     }
 
-    /// Point macOS's wallpaper rotation at the output folder on every screen (current Space).
+    /// Point macOS's wallpaper rotation at the output folder on every screen (current Space),
+    /// then put back the chosen interval, which setting a folder resets to 30 minutes.
     func useFolderAsDesktopWallpaper() {
         pinnedWallpaper = nil
         guard !isDemo else { return }
@@ -444,6 +496,115 @@ final class AppModel {
             }
         } catch {
             errorMessage = "Couldn't set the wallpaper folder: \(error.localizedDescription)"
+            return
+        }
+        guard macInterval != nil || macRandomly != nil else { return }
+        Task {
+            // WallpaperAgent writes the folder to its store asynchronously; patching before
+            // that lands gets overwritten.
+            try? await Task.sleep(for: .seconds(1.5))
+            await applyMacRotation()
+        }
+    }
+
+    /// Writes `macInterval` / `macRandomly` into macOS's wallpaper settings for this folder.
+    func applyMacRotation() async {
+        guard !isDemo else { return }
+        let folder = outputFolder, interval = macInterval, randomly = macRandomly
+        let changed = await Task.detached { () -> Int? in
+            guard let changed = try? MacRotation.apply(folder: folder, interval: interval, randomly: randomly) else { return nil }
+            if changed > 0 { MacRotation.restartAgent() }
+            return changed
+        }.value
+        switch changed {
+        case nil: errorMessage = "Couldn't change macOS's wallpaper settings."
+        case 0?: errorMessage = "No desktop rotates through this folder yet. Use “Make it my wallpaper” first."
+        default: errorMessage = nil
+        }
+    }
+
+    /// What macOS currently has for this folder, to show in Settings.
+    func loadMacRotation() {
+        guard !isDemo, let current = MacRotation.current(for: outputFolder) else { return }
+        if let interval = current.interval { macInterval = interval }
+        macRandomly = current.randomly ?? true
+    }
+
+    /// Pinwall mode: next wallpaper now, and restart the countdown.
+    func nextWallpaper() {
+        guard let next = pickNext() else { return }
+        show(next)
+        scheduleRotation()
+    }
+
+    private func startRotation() {
+        guard !isDemo else { return }
+        spaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            // setDesktopImageURL only reaches the Space that's active, so each desktop gets
+            // the current wallpaper when you switch to it.
+            MainActor.assumeIsolated {
+                guard let self, let current = self.currentWallpaper else { return }
+                self.show(current)
+            }
+        }
+        nextWallpaper()
+    }
+
+    private func stopRotation() {
+        rotationTimer?.invalidate()
+        rotationTimer = nil
+        nextChange = nil
+        if let spaceObserver { NSWorkspace.shared.notificationCenter.removeObserver(spaceObserver) }
+        spaceObserver = nil
+    }
+
+    private func scheduleRotation() {
+        rotationTimer?.invalidate()
+        guard rotationMode == .pinwall else { return }
+        nextChange = .now.addingTimeInterval(pinwallInterval)
+        rotationTimer = Timer.scheduledTimer(withTimeInterval: pinwallInterval, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.nextWallpaper() }
+        }
+    }
+
+    private func pickNext() -> URL? {
+        let pool = wallpapers.map(\.url)
+        guard !pool.isEmpty else { return nil }
+        switch pinwallOrder {
+        case .random:
+            return pool.filter { $0 != currentWallpaper }.randomElement() ?? pool.first
+        case .newestFirst:
+            guard let current = currentWallpaper, let index = pool.firstIndex(of: current) else { return pool.first }
+            return pool[(index + 1) % pool.count]
+        }
+    }
+
+    @discardableResult
+    private func show(_ url: URL) -> Bool {
+        if isDemo { currentWallpaper = url; return true }
+        do {
+            for screen in NSScreen.screens {
+                try NSWorkspace.shared.setDesktopImageURL(url, for: screen, options: [:])
+            }
+            if rotationMode == .pinwall { currentWallpaper = url }
+            return true
+        } catch {
+            errorMessage = "Couldn't set the wallpaper: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    private func rotationModeChanged() {
+        switch rotationMode {
+        case .pinwall:
+            pinnedWallpaper = nil
+            startRotation()
+        case .macOS:
+            stopRotation()
+            currentWallpaper = nil
+            useFolderAsDesktopWallpaper()
         }
     }
 

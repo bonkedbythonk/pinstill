@@ -41,6 +41,16 @@ struct MenuView: View {
                 }
             }
             Spacer()
+            if model.rotationMode == .pinwall, !model.wallpapers.isEmpty {
+                Button {
+                    model.nextWallpaper()
+                } label: {
+                    Image(systemName: "forward.end")
+                        .font(.system(size: 13, weight: .medium))
+                }
+                .buttonStyle(.borderless)
+                .help("Next wallpaper")
+            }
             if model.hasCompletedSetup, model.account.username != nil, model.board != nil {
                 Button {
                     Task { await model.sync() }
@@ -117,7 +127,7 @@ private struct Wall: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             StatusLine()
-            if model.pinnedWallpaper != nil {
+            if model.rotationMode == .macOS, model.pinnedWallpaper != nil {
                 Notice(text: "Rotation is paused on this desktop.", action: ("Resume", model.resumeRotation))
             }
             if model.upscaler == nil {
@@ -131,15 +141,26 @@ private struct Wall: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.vertical, 18)
             } else {
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
-                          alignment: .leading, spacing: 12) {
-                    ForEach(model.wallpapers.prefix(6)) { wallpaper in
-                        WallpaperPrint(wallpaper: wallpaper)
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
+                              alignment: .leading, spacing: 12) {
+                        ForEach(model.wallpapers) { wallpaper in
+                            WallpaperPrint(wallpaper: wallpaper)
+                        }
                     }
+                    .padding(.top, 5) // room for the pin dot above the first row
                 }
+                .scrollIndicators(.automatic)
+                // Popovers size to fit, which collapses a bare ScrollView: give it the grid's
+                // height, up to three and a half rows so it's clear there's more below.
+                .frame(height: gridHeight)
                 Hairline()
                 HStack(spacing: 4) {
                     Text("\(model.wallpapers.count) on the wall")
+                    if let next = model.nextChange {
+                        Text("· next")
+                        Text(next, style: .relative)
+                    }
                     if !model.skippedPins.isEmpty {
                         Text("· \(model.skippedPins.count) skipped").help(skippedHelp)
                     }
@@ -151,6 +172,12 @@ private struct Wall: View {
                 .foregroundStyle(.secondary)
             }
         }
+    }
+
+    /// A print is about 124pt tall at this width (16:10 image, mat, caption), rows 12pt apart.
+    private var gridHeight: CGFloat {
+        let rows = CGFloat((model.wallpapers.count + 1) / 2)
+        return min(rows * 124 + (rows - 1) * 12 + 5, 3.5 * 136)
     }
 
     private var skippedHelp: String {

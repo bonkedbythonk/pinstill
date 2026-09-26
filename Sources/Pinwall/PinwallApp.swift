@@ -16,11 +16,12 @@ struct PinwallApp: App {
 /// Status item with an NSPopover rather than `MenuBarExtra(.window)`: the popover follows the
 /// content's size as it changes, which MenuBarExtra windows don't.
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var model: AppModel!
     private var statusItem: NSStatusItem!
     private let popover = NSPopover()
     private var windows: [String: NSWindow] = [:]
+    private var outsideClickMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let arguments = CommandLine.arguments
@@ -43,6 +44,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hosting.sizingOptions = [.preferredContentSize]
         popover.contentViewController = hosting
         popover.behavior = .transient
+        popover.delegate = self
+        // The size animation made the popover jump whenever its content re-measured
+        // (opening a menu inside it, a sync finishing).
+        popover.animates = false
 
         if model.hasCompletedSetup {
             Task { await model.refresh() } // sync on launch
@@ -57,9 +62,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         guard let button = statusItem.button else { return }
+        // A transient popover only closes on outside clicks while its app is active,
+        // and a menu bar app usually isn't.
+        NSApp.activate()
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
         Task { await model.refresh() } // sync whenever the menu opens
+    }
+
+    func popoverDidShow(_ notification: Notification) {
+        // Clicks in other apps never reach us, so watch for them globally and close.
+        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            MainActor.assumeIsolated { self?.popover.performClose(nil) }
+        }
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
+        outsideClickMonitor = nil
     }
 
     // MARK: Windows

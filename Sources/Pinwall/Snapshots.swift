@@ -35,7 +35,7 @@ enum Snapshots {
                        to: folder.appending(path: "setup-\(step).png"))
         }
 
-        for tab in [SettingsView.Tab.general, .pinterest, .upscaling, .about] {
+        for tab in [SettingsView.Tab.general, .rotation, .pinterest, .upscaling, .about] {
             let model = demoModel(wallpapers: samples)
             await snap(SettingsView(tab: tab).environment(model), appearance: .darkAqua,
                        to: folder.appending(path: "settings-\(tab).png"))
