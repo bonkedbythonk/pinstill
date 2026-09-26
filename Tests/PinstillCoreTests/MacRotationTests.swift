@@ -1,8 +1,8 @@
 import Foundation
 import Testing
-@testable import PinwallCore
+@testable import PinstillCore
 
-/// A store shaped like macOS 27's Index.plist: one Space rotating the Pinwall folder,
+/// A store shaped like macOS 27's Index.plist: one Space rotating the Pinstill folder,
 /// one rotating another folder, one on a single image.
 private func makeStore() throws -> URL {
     func bplist(_ value: Any) throws -> Data {
@@ -23,7 +23,7 @@ private func makeStore() throws -> URL {
     }
     let root: [String: Any] = [
         "Spaces": [
-            "A": ["Default": try content(folder: "file:///Users/me/Pictures/Pinwall/", interval: "shuffle_every_30_minutes")],
+            "A": ["Default": try content(folder: "file:///Users/me/Pictures/Pinstill/", interval: "shuffle_every_30_minutes")],
             "B": ["Default": try content(folder: "file:///Users/me/Other/", interval: "shuffle_every_1_hour")],
             "C": ["Default": try content(folder: nil, image: "file:///Users/me/a.jpg", interval: "shuffle_every_1_day")],
         ],
@@ -33,21 +33,21 @@ private func makeStore() throws -> URL {
     return url
 }
 
-private let pinwallFolder = URL(filePath: "/Users/me/Pictures/Pinwall", directoryHint: .isDirectory)
+private let pinstillFolder = URL(filePath: "/Users/me/Pictures/Pinstill", directoryHint: .isDirectory)
 
 @Test func readsCurrentInterval() throws {
     let store = try makeStore()
-    let settings = MacRotation.current(for: pinwallFolder, store: store)
+    let settings = MacRotation.current(for: pinstillFolder, store: store)
     #expect(settings?.interval == .every30Minutes)
     #expect(settings?.randomly == nil)
 }
 
 @Test func appliesOnlyToDesktopsRotatingThatFolder() throws {
     let store = try makeStore()
-    let changed = try MacRotation.apply(folder: pinwallFolder, interval: .every5Minutes, randomly: true, store: store)
+    let changed = try MacRotation.apply(folder: pinstillFolder, interval: .every5Minutes, randomly: true, store: store)
     #expect(changed == 1)
 
-    let after = MacRotation.current(for: pinwallFolder, store: store)
+    let after = MacRotation.current(for: pinstillFolder, store: store)
     #expect(after?.interval == .every5Minutes)
     #expect(after?.randomly == true)
     #expect(MacRotation.current(for: URL(filePath: "/Users/me/Other"), store: store)?.interval == .every1Hour)

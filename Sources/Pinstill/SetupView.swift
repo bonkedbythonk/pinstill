@@ -1,4 +1,4 @@
-import PinwallCore
+import PinstillCore
 import SwiftUI
 
 /// First run. Every choice here is also in Settings, so nothing is final.
@@ -19,12 +19,12 @@ struct SetupView: View {
 
         var subtitle: String {
             switch self {
-            case .welcome: "What Pinwall does, and what it doesn't."
+            case .welcome: "What Pinstill does, and what it doesn't."
             case .upscayl: "Most pins are smaller than a Mac screen. Upscayl, a free app, enlarges them with AI."
-            case .pinterest: "Pinwall reads your board the way pinterest.com does, so secret boards and private profiles work."
+            case .pinterest: "Pinstill reads your board the way pinterest.com does, so secret boards and private profiles work."
             case .folder: "Finished wallpapers go here, and macOS rotates through them."
             case .board: "Only pins on this board become wallpapers. A new secret board just for this works well."
-            case .done: "Save pins, open Pinwall, and they show up on your desktop."
+            case .done: "Save pins, open Pinstill, and they show up on your desktop."
             }
         }
     }
@@ -81,16 +81,16 @@ struct SetupView: View {
     private var welcome: some View {
         Rows {
             Row(label: "You save", text: "Pins go on one Pinterest board, from your phone or your computer.")
-            Row(label: "Pinwall fits", text: "Each pin is cropped to this Mac's screen, \(model.target.width)×\(model.target.height), and upscaled when it's too small. Tall phone wallpapers are skipped.")
-            Row(label: "macOS rotates", text: "Wallpapers land in one folder that your Mac cycles through. Pinwall only has to be open while it syncs.")
-            Row(label: "Good to know", text: "Pinwall isn't made by Pinterest. It uses the Pinterest website, so a change on their end can stop syncing until Pinwall is updated.")
+            Row(label: "Pinstill fits", text: "Each pin is cropped to this Mac's screen, \(model.target.width)×\(model.target.height), and upscaled when it's too small. Tall phone wallpapers are skipped.")
+            Row(label: "macOS rotates", text: "Wallpapers land in one folder that your Mac cycles through. Pinstill only has to be open while it syncs.")
+            Row(label: "Good to know", text: "Pinstill isn't made by Pinterest. It uses the Pinterest website, so a change on their end can stop syncing until Pinstill is updated.")
         }
     }
 
     private var upscayl: some View {
         Rows {
             if let upscaler = model.upscaler {
-                Row(label: "Found", text: "Upscayl \(upscaler.version ?? "") with \(upscaler.installedModels.count) models. Pinwall picks Digital art for anime and illustrations and High fidelity for photos, per image.")
+                Row(label: "Found", text: "Upscayl \(upscaler.version ?? "") with \(upscaler.installedModels.count) models. Pinstill picks Digital art for anime and illustrations and High fidelity for photos, per image.")
             } else {
                 Row(label: "Not found", text: "Without Upscayl, small pins are only resized and look soft. Install it, then check again.") {
                     HStack(spacing: 14) {
@@ -107,7 +107,7 @@ struct SetupView: View {
         Group {
             if let username = model.account.username {
                 Rows {
-                    Row(label: "Account", text: "Logged in as \(username). The login stays in Pinwall's own storage on this Mac.")
+                    Row(label: "Account", text: "Logged in as \(username). The login stays in Pinstill's own storage on this Mac.")
                 }
             } else {
                 VStack(alignment: .leading, spacing: 8) {
@@ -116,7 +116,7 @@ struct SetupView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Theme.hairline))
                         .loginWatcher { }
-                    Text("This is pinterest.com itself. Pinwall never sees your password.")
+                    Text("This is pinterest.com itself. Pinstill never sees your password.")
                         .meta(size: 11)
                         .foregroundStyle(.secondary)
                 }
@@ -141,7 +141,7 @@ struct SetupView: View {
 
             Toggle(isOn: $useAsDesktopWallpaper) {
                 Text("Make it my desktop wallpaper")
-                Text("Rotates through the folder. How often is up to you, in Pinwall's settings.")
+                Text("Rotates through the folder. How often is up to you, in Pinstill's settings.")
             }
             Toggle(isOn: $model.fitOwnImages) {
                 Text("Fit images I put in the folder myself, too")
@@ -172,10 +172,10 @@ struct SetupView: View {
         return VStack(alignment: .leading, spacing: 18) {
             Rows {
                 Row(label: "Save", text: "Put pins on \(model.board?.name ?? "your board"). Landscape images work best.")
-                Row(label: "Open", text: "Pinwall checks the board when it starts and each time you click its icon in the menu bar.")
+                Row(label: "Open", text: "Pinstill checks the board when it starts and each time you click its icon in the menu bar.")
                 Row(label: "Quit", text: "When it's done, if you like. Your Mac keeps rotating the wallpapers.")
             }
-            Toggle("Open Pinwall when I log in", isOn: $model.launchAtLogin)
+            Toggle("Open Pinstill when I log in", isOn: $model.launchAtLogin)
                 .toggleStyle(.checkbox)
         }
     }

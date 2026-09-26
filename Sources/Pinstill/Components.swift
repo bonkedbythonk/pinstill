@@ -1,6 +1,6 @@
 import AppKit
 import ImageIO
-import PinwallCore
+import PinstillCore
 import SwiftUI
 import WebKit
 

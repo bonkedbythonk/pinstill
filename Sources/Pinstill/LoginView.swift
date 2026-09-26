@@ -18,10 +18,10 @@ struct LoginView: View {
     }
 }
 
-/// "Your password goes to Pinterest, not Pinwall."
+/// "Your password goes to Pinterest, not Pinstill."
 struct LoginNotice: View {
     var body: some View {
-        Label("You're logging in on pinterest.com. Pinwall never sees your password; it only keeps the session cookie on this Mac.",
+        Label("You're logging in on pinterest.com. Pinstill never sees your password; it only keeps the session cookie on this Mac.",
               systemImage: "lock.shield")
             .font(.caption)
             .foregroundStyle(.secondary)

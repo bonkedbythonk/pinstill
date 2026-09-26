@@ -11,21 +11,26 @@ public enum LocalFitter {
 
     static let imageExtensions: Set<String> = ["jpg", "jpeg", "png", "heic", "webp", "tif", "tiff"]
 
-    /// `~/Documents/Pinwall` → `~/Documents/Pinwall Originals` (outside the rotation folder).
+    /// `~/Documents/Pinstill` → `~/Documents/Pinstill Originals` (outside the rotation folder).
     public static func originalsFolder(for folder: URL) -> URL {
         folder.deletingLastPathComponent()
             .appending(path: "\(folder.lastPathComponent) Originals", directoryHint: .isDirectory)
     }
 
     /// The user's own images in `folder` that aren't already exactly `target` size.
-    /// Pinwall's own `pinwall-*.jpg` outputs are left alone.
+    /// Pinstill's own outputs are left alone: `pinstill-*.jpg`, and `pinwall-*.jpg` from
+    /// before the app was renamed.
     public static func candidates(in folder: URL, target: PixelSize) -> [URL] {
         let files = (try? FileManager.default.contentsOfDirectory(
             at: folder, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
         return files
-            .filter { imageExtensions.contains($0.pathExtension.lowercased()) && !$0.lastPathComponent.hasPrefix("pinwall-") }
+            .filter { imageExtensions.contains($0.pathExtension.lowercased()) && !isOwnOutput($0) }
             .filter { pixelSize(of: $0).map { $0 != target } ?? false }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    static func isOwnOutput(_ file: URL) -> Bool {
+        ["pinstill-", "pinwall-"].contains { file.lastPathComponent.hasPrefix($0) }
     }
 
     /// Reads dimensions from the file header without decoding the image.

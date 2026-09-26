@@ -5,8 +5,8 @@ CONF=${1:-release}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
-APP_NAME=${APP_NAME:-Pinwall}
-BUNDLE_ID=${BUNDLE_ID:-io.github.bonkedbythonk.pinwall}
+APP_NAME=${APP_NAME:-Pinstill}
+BUNDLE_ID=${BUNDLE_ID:-io.github.bonkedbythonk.pinstill}
 MACOS_MIN_VERSION=${MACOS_MIN_VERSION:-15.0}
 MENU_BAR_APP=${MENU_BAR_APP:-1}
 SIGNING_MODE=${SIGNING_MODE:-}

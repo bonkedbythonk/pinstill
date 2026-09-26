@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Pinwall's look: a gallery wall. The wallpapers are the colour; the chrome around them
+/// Pinstill's look: a gallery wall. The wallpapers are the colour; the chrome around them
 /// stays quiet and native.
 ///
 /// - Thumbnails are prints: a thin mat, flat at rest, lifted a little on hover.

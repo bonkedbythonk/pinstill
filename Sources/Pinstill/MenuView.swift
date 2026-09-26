@@ -1,7 +1,7 @@
-import PinwallCore
+import PinstillCore
 import SwiftUI
 
-/// The status item popover: the wall of recent wallpapers, and what Pinwall is doing.
+/// The status item popover: the wall of recent wallpapers, and what Pinstill is doing.
 struct MenuView: View {
     @Environment(AppModel.self) private var model
 
@@ -37,7 +37,7 @@ struct MenuView: View {
         HStack(alignment: .center, spacing: 10) {
             AppIconView(size: 26)
             VStack(alignment: .leading, spacing: 1) {
-                Text("Pinwall").font(.system(size: 14, weight: .semibold))
+                Text("Pinstill").font(.system(size: 14, weight: .semibold))
                 if let board = model.board, model.hasCompletedSetup {
                     Text(board.name + (board.isSecret ? " · secret board" : ""))
                         .meta(size: 11)
@@ -46,7 +46,7 @@ struct MenuView: View {
                 }
             }
             Spacer()
-            if model.rotationMode == .pinwall, !model.wallpapers.isEmpty {
+            if model.rotationMode == .pinstill, !model.wallpapers.isEmpty {
                 Button {
                     model.nextWallpaper()
                 } label: {
@@ -76,7 +76,7 @@ struct MenuView: View {
                 Button("Open wallpaper folder") { model.openOutputFolder() }
                 Button("Run setup again…") { model.presentSetup() }
                 Divider()
-                Button("Quit Pinwall") { NSApp.terminate(nil) }
+                Button("Quit Pinstill") { NSApp.terminate(nil) }
                     .keyboardShortcut("q")
             } label: {
                 Image(systemName: "ellipsis")
@@ -95,7 +95,7 @@ struct MenuView: View {
         if !model.hasCompletedSetup {
             Prompt(title: "Not set up yet",
                    text: "Pick a Pinterest board, and every pin you save to it turns into a wallpaper sized for this Mac.",
-                   button: ("Set up Pinwall", model.presentSetup))
+                   button: ("Set up Pinstill", model.presentSetup))
         } else {
             switch model.account {
             case .unknown:
@@ -106,7 +106,7 @@ struct MenuView: View {
                 .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
             case .loggedOut:
                 Prompt(title: "Logged out of Pinterest",
-                       text: "Pinterest ended the session. Log in again and Pinwall picks up where it left off.",
+                       text: "Pinterest ended the session. Log in again and Pinstill picks up where it left off.",
                        button: ("Log in", model.presentLogin))
             case .loggedIn:
                 if model.board == nil {
@@ -133,7 +133,7 @@ private struct Wall: View {
         VStack(alignment: .leading, spacing: 14) {
             StatusLine()
             if let update = model.availableUpdate {
-                Notice(text: "Pinwall \(update.version) is out.",
+                Notice(text: "Pinstill \(update.version) is out.",
                        action: ("Get it", { NSWorkspace.shared.open(update.page) }))
             }
             if model.rotationMode == .macOS, model.pinnedWallpaper != nil {

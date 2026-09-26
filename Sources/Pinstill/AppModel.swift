@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 import Observation
 import os
-import PinwallCore
+import PinstillCore
 import CryptoKit
 import ServiceManagement
 
@@ -97,7 +97,7 @@ final class AppModel {
         didSet { defaults.set(pinnedWallpaper?.path(percentEncoded: false), forKey: "pinnedWallpaper") }
     }
 
-    /// Who rotates the wallpapers: macOS (works with Pinwall closed) or Pinwall (more control,
+    /// Who rotates the wallpapers: macOS (works with Pinstill closed) or Pinstill (more control,
     /// has to stay open).
     var rotationMode: RotationMode {
         didSet {
@@ -116,19 +116,19 @@ final class AppModel {
         didSet { defaults.set(macRandomly, forKey: "macRandomly") }
     }
 
-    /// Pinwall mode: seconds between wallpapers, and in which order.
-    var pinwallInterval: TimeInterval {
+    /// Pinstill mode: seconds between wallpapers, and in which order.
+    var pinstillInterval: TimeInterval {
         didSet {
-            defaults.set(pinwallInterval, forKey: "pinwallInterval")
+            defaults.set(pinstillInterval, forKey: "pinstillInterval")
             scheduleRotation()
         }
     }
 
-    var pinwallOrder: RotationOrder {
-        didSet { store(pinwallOrder, key: "pinwallOrder") }
+    var pinstillOrder: RotationOrder {
+        didSet { store(pinstillOrder, key: "pinstillOrder") }
     }
 
-    /// Pinwall mode: what's showing and when it changes.
+    /// Pinstill mode: what's showing and when it changes.
     private(set) var currentWallpaper: URL?
     private(set) var nextChange: Date?
     @ObservationIgnored private var rotationTimer: Timer?
@@ -168,20 +168,20 @@ final class AppModel {
     /// Own images left alone this session (wrong shape / failed), so they aren't retried every sync.
     @ObservationIgnored private var skippedLocalFiles: Set<String> = []
     private let defaults: UserDefaults
-    private let log = Logger(subsystem: "Pinwall", category: "sync")
+    private let log = Logger(subsystem: "Pinstill", category: "sync")
     /// Upper bound on pages fetched per sync (25 pins each).
     private let maxPages = 10
 
-    nonisolated static let supportFolder = URL.applicationSupportDirectory.appending(path: "Pinwall")
-    static let defaultOutputFolder = URL.picturesDirectory.appending(path: "Pinwall", directoryHint: .isDirectory)
+    nonisolated static let supportFolder = URL.applicationSupportDirectory.appending(path: "Pinstill")
+    static let defaultOutputFolder = URL.picturesDirectory.appending(path: "Pinstill", directoryHint: .isDirectory)
 
-    /// A separate Pinwall for testing first run: own settings, library, Pinterest login and
-    /// wallpaper folder. `Pinwall --profile <name> [--no-upscayl]`; not shown in the UI.
+    /// A separate Pinstill for testing first run: own settings, library, Pinterest login and
+    /// wallpaper folder. `Pinstill --profile <name> [--no-upscayl]`; not shown in the UI.
     struct Profile {
         let name: String
         let hideUpscayl: Bool
 
-        var defaults: UserDefaults { UserDefaults(suiteName: "io.github.bonkedbythonk.pinwall.profile.\(name)")! }
+        var defaults: UserDefaults { UserDefaults(suiteName: "io.github.bonkedbythonk.pinstill.profile.\(name)")! }
         var folder: URL { AppModel.supportFolder.appending(path: "Profiles/\(name)") }
     }
 
@@ -211,8 +211,8 @@ final class AppModel {
         rotationMode = Self.load(RotationMode.self, key: "rotationMode", from: defaults) ?? .macOS
         macInterval = Self.load(ShuffleInterval.self, key: "macInterval", from: defaults)
         macRandomly = defaults.object(forKey: "macRandomly") as? Bool
-        pinwallInterval = defaults.object(forKey: "pinwallInterval") as? Double ?? 15 * 60
-        pinwallOrder = Self.load(RotationOrder.self, key: "pinwallOrder", from: defaults) ?? .random
+        pinstillInterval = defaults.object(forKey: "pinstillInterval") as? Double ?? 15 * 60
+        pinstillOrder = Self.load(RotationOrder.self, key: "pinstillOrder", from: defaults) ?? .random
         upscaler = profile?.hideUpscayl == true ? nil : Upscaler.locate()
         target = Screens.largestPixelSize()
         if !demo {
@@ -221,7 +221,7 @@ final class AppModel {
             }
             reloadWallpapers()
             if macInterval == nil { loadMacRotation() }
-            if rotationMode == .pinwall { startRotation() }
+            if rotationMode == .pinstill { startRotation() }
         }
     }
 
@@ -375,9 +375,10 @@ final class AppModel {
         var options = PipelineOptions(
             target: target,
             outputFolder: outputFolder,
-            workFolder: URL.cachesDirectory.appending(path: "Pinwall/work"),
+            workFolder: URL.cachesDirectory.appending(path: "Pinstill/work"),
             upscaler: upscaler)
         options.model = upscaleModel
+        options.existingOutputs = redoOutputs
         return options
     }
 
@@ -451,11 +452,12 @@ final class AppModel {
         guard !isBusy else { return }
         // Only wallpapers still in the folder: anything the user trashed stays gone.
         let fm = FileManager.default
-        let donePins = library.records.values.filter { record in
+        let redo = library.records.values.filter { record in
             guard record.status == .done, let output = record.output else { return false }
             return fm.fileExists(atPath: outputFolder.appending(path: output).path(percentEncoded: false))
-        }.map(\.pin.id)
-        try? library.remove(donePins)
+        }
+        redoOutputs = Dictionary(uniqueKeysWithValues: redo.compactMap { r in r.output.map { (r.pin.id, $0) } })
+        try? library.remove(redo.map(\.pin.id))
 
         if fitOwnImages {
             let originals = LocalFitter.originalsFolder(for: outputFolder)
@@ -471,7 +473,11 @@ final class AppModel {
         }
         lastSync = nil
         await sync()
+        redoOutputs = [:]
     }
+
+    /// Set while `reprocessEverything` runs: which file each redone pin overwrites.
+    @ObservationIgnored private var redoOutputs: [String: String] = [:]
 
     // MARK: Wallpapers
 
@@ -495,7 +501,7 @@ final class AppModel {
     /// Moves a wallpaper to the Trash. Its pin stays "seen", so it isn't downloaded again.
     func trash(_ wallpaper: Wallpaper) {
         if rotationMode == .macOS, wallpaper.url == pinnedWallpaper { resumeRotation() }
-        if rotationMode == .pinwall, wallpaper.url == currentWallpaper { nextWallpaper() }
+        if rotationMode == .pinstill, wallpaper.url == currentWallpaper { nextWallpaper() }
         if isDemo {
             wallpapers.removeAll { $0.url == wallpaper.url }
             return
@@ -507,16 +513,16 @@ final class AppModel {
 
     // MARK: Rotation
 
-    enum RotationMode: String, Codable { case macOS, pinwall }
+    enum RotationMode: String, Codable { case macOS, pinstill }
     enum RotationOrder: String, Codable, CaseIterable { case random, newestFirst }
 
-    /// The wallpaper showing on the desktop right now, when Pinwall knows it.
-    var desktopWallpaper: URL? { rotationMode == .pinwall ? currentWallpaper : pinnedWallpaper }
+    /// The wallpaper showing on the desktop right now, when Pinstill knows it.
+    var desktopWallpaper: URL? { rotationMode == .pinstill ? currentWallpaper : pinnedWallpaper }
 
     /// Shows one wallpaper right now. In macOS mode that pauses macOS's rotation on the current
-    /// desktop until `resumeRotation()`; in Pinwall mode rotation carries on from it.
+    /// desktop until `resumeRotation()`; in Pinstill mode rotation carries on from it.
     func setAsDesktop(_ wallpaper: Wallpaper) {
-        if rotationMode == .pinwall {
+        if rotationMode == .pinstill {
             show(wallpaper.url)
             scheduleRotation()
             return
@@ -575,7 +581,7 @@ final class AppModel {
         macRandomly = current.randomly ?? true
     }
 
-    /// Pinwall mode: next wallpaper now, and restart the countdown.
+    /// Pinstill mode: next wallpaper now, and restart the countdown.
     func nextWallpaper() {
         guard let next = pickNext() else { return }
         show(next)
@@ -607,9 +613,9 @@ final class AppModel {
 
     private func scheduleRotation() {
         rotationTimer?.invalidate()
-        guard rotationMode == .pinwall else { return }
-        nextChange = .now.addingTimeInterval(pinwallInterval)
-        rotationTimer = Timer.scheduledTimer(withTimeInterval: pinwallInterval, repeats: false) { [weak self] _ in
+        guard rotationMode == .pinstill else { return }
+        nextChange = .now.addingTimeInterval(pinstillInterval)
+        rotationTimer = Timer.scheduledTimer(withTimeInterval: pinstillInterval, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.nextWallpaper() }
         }
     }
@@ -617,7 +623,7 @@ final class AppModel {
     private func pickNext() -> URL? {
         let pool = wallpapers.map(\.url)
         guard !pool.isEmpty else { return nil }
-        switch pinwallOrder {
+        switch pinstillOrder {
         case .random:
             return pool.filter { $0 != currentWallpaper }.randomElement() ?? pool.first
         case .newestFirst:
@@ -633,7 +639,7 @@ final class AppModel {
             for screen in NSScreen.screens {
                 try NSWorkspace.shared.setDesktopImageURL(url, for: screen, options: [:])
             }
-            if rotationMode == .pinwall { currentWallpaper = url }
+            if rotationMode == .pinstill { currentWallpaper = url }
             return true
         } catch {
             errorMessage = "Couldn't set the wallpaper: \(error.localizedDescription)"
@@ -643,7 +649,7 @@ final class AppModel {
 
     private func rotationModeChanged() {
         switch rotationMode {
-        case .pinwall:
+        case .pinstill:
             pinnedWallpaper = nil
             startRotation()
         case .macOS:
@@ -687,7 +693,7 @@ final class AppModel {
 
     // MARK: Errors
 
-    static let issuesURL = URL(string: "https://github.com/bonkedbythonk/pinwall/issues")!
+    static let issuesURL = URL(string: "https://github.com/bonkedbythonk/pinstill/issues")!
 
     /// Turns an error into something a person can act on.
     private func report(_ error: Error) { report(error: error) }
@@ -699,7 +705,7 @@ final class AppModel {
                                           .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed].contains(error.code):
             errorMessage = "Can't reach Pinterest. Check your internet connection and try again."
         case is SessionError, is PinterestAPIError, is DecodingError:
-            errorMessage = "Pinterest changed something on their end, so Pinwall can't read your board right now. An update to Pinwall will fix it."
+            errorMessage = "Pinterest changed something on their end, so Pinstill can't read your board right now. An update to Pinstill will fix it."
             errorLink = Self.issuesURL
         default:
             if (error as NSError).domain == "WKErrorDomain" {

@@ -2,14 +2,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "Pinwall",
+    name: "Pinstill",
     platforms: [.macOS(.v15)],
     targets: [
-        .target(name: "PinwallCore"),
-        .executableTarget(name: "Pinwall", dependencies: ["PinwallCore"]),
+        .target(name: "PinstillCore"),
+        .executableTarget(name: "Pinstill", dependencies: ["PinstillCore"]),
         .testTarget(
-            name: "PinwallCoreTests",
-            dependencies: ["PinwallCore"],
+            name: "PinstillCoreTests",
+            dependencies: ["PinstillCore"],
             resources: [.copy("Fixtures")]
         ),
     ]

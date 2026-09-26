@@ -1,4 +1,4 @@
-import PinwallCore
+import PinstillCore
 import SwiftUI
 
 struct SettingsView: View {
@@ -62,7 +62,7 @@ private struct GeneralSettings: View {
                     Text("Fit images I put in the folder myself, too")
                     Text("Cropped and upscaled like pins. The originals move to \(LocalFitter.originalsFolder(for: model.outputFolder).lastPathComponent).")
                 }
-                Toggle("Open Pinwall when I log in", isOn: $model.launchAtLogin)
+                Toggle("Open Pinstill when I log in", isOn: $model.launchAtLogin)
             }
         }
         .formStyle(.grouped)
@@ -72,7 +72,7 @@ private struct GeneralSettings: View {
 private struct RotationSettings: View {
     @Environment(AppModel.self) private var model
 
-    static let pinwallIntervals: [(String, TimeInterval)] = [
+    static let pinstillIntervals: [(String, TimeInterval)] = [
         ("Every minute", 60), ("Every 5 minutes", 300), ("Every 15 minutes", 900),
         ("Every 30 minutes", 1800), ("Every hour", 3600), ("Every 3 hours", 10800), ("Every day", 86400),
     ]
@@ -83,13 +83,13 @@ private struct RotationSettings: View {
             Section {
                 Picker("Who switches wallpapers", selection: $model.rotationMode) {
                     Text("macOS").tag(AppModel.RotationMode.macOS)
-                    Text("Pinwall").tag(AppModel.RotationMode.pinwall)
+                    Text("Pinstill").tag(AppModel.RotationMode.pinstill)
                 }
                 .pickerStyle(.segmented)
             } footer: {
                 Text(model.rotationMode == .macOS
-                     ? "macOS rotates through the folder by itself, so Pinwall can be closed."
-                     : "Pinwall picks the next wallpaper itself. It has to stay open in the menu bar for that, so turn on Open Pinwall when I log in in General.")
+                     ? "macOS rotates through the folder by itself, so Pinstill can be closed."
+                     : "Pinstill picks the next wallpaper itself. It has to stay open in the menu bar for that, so turn on Open Pinstill when I log in in General.")
                     .settingsFooter()
             }
 
@@ -104,15 +104,15 @@ private struct RotationSettings: View {
                         get: { model.macRandomly ?? true },
                         set: { model.macRandomly = $0; Task { await model.applyMacRotation() } }))
                 } footer: {
-                    Text("These are the same settings as System Settings, Wallpaper, for desktops that use this folder. macOS has no public way to change them, so Pinwall edits its settings file and restarts the wallpaper process; your desktop may blink once. A macOS update could stop this from working.")
+                    Text("These are the same settings as System Settings, Wallpaper, for desktops that use this folder. macOS has no public way to change them, so Pinstill edits its settings file and restarts the wallpaper process; your desktop may blink once. A macOS update could stop this from working.")
                         .settingsFooter()
                 }
             } else {
                 Section {
-                    Picker("Change wallpaper", selection: $model.pinwallInterval) {
-                        ForEach(Self.pinwallIntervals, id: \.1) { Text($0.0).tag($0.1) }
+                    Picker("Change wallpaper", selection: $model.pinstillInterval) {
+                        ForEach(Self.pinstillIntervals, id: \.1) { Text($0.0).tag($0.1) }
                     }
-                    Picker("Order", selection: $model.pinwallOrder) {
+                    Picker("Order", selection: $model.pinstillOrder) {
                         Text("Random").tag(AppModel.RotationOrder.random)
                         Text("Newest first").tag(AppModel.RotationOrder.newestFirst)
                     }
@@ -165,7 +165,7 @@ private struct PinterestSettings: View {
                             .font(.caption)
                     }
                 } footer: {
-                    Text("Pins saved to this board become wallpapers the next time Pinwall syncs.")
+                    Text("Pins saved to this board become wallpapers the next time Pinstill syncs.")
                         .settingsFooter()
                 }
             }
@@ -229,12 +229,12 @@ private struct UpscalingSettings: View {
 }
 
 private struct AboutView: View {
-    static let repo = URL(string: "https://github.com/bonkedbythonk/pinwall")!
+    static let repo = URL(string: "https://github.com/bonkedbythonk/pinstill")!
 
     var body: some View {
         VStack(spacing: 10) {
             AppIconView(size: 80)
-            Text("Pinwall").font(.title.weight(.bold))
+            Text("Pinstill").font(.title.weight(.bold))
             Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev")")
                 .foregroundStyle(.secondary)
             Text("Pinterest boards, as wallpapers.")
@@ -245,7 +245,7 @@ private struct AboutView: View {
                 Text("·").foregroundStyle(.secondary)
                 Link("Upscayl", destination: Upscaler.downloadURL)
             }
-            Text("Not made by Pinterest or Upscayl. Pinwall uses the Pinterest website the way a browser does, so a change on their end can stop syncing until Pinwall is updated.")
+            Text("Not made by Pinterest or Upscayl. Pinstill uses the Pinterest website the way a browser does, so a change on their end can stop syncing until Pinstill is updated.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

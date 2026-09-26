@@ -1,4 +1,4 @@
-// Draws the Pinwall app icon and writes Icon.icns + docs/icon.png.
+// Draws the Pinstill app icon and writes Icon.icns + docs/icon.png.
 // Usage: swift Scripts/make_icon.swift   (from the repo root)
 import AppKit
 
@@ -60,7 +60,7 @@ func drawIcon(size: CGFloat) -> NSBitmapImageRep {
     near.fill()
     ctx.restoreGState()
 
-    // The pin: Pinwall's one red thing.
+    // The pin: Pinstill's one red thing.
     let head = NSRect(x: 470 * s, y: 640 * s, width: 104 * s, height: 104 * s)
     rgb(178, 52, 44).setFill()                        // flat under-edge
     NSBezierPath(ovalIn: head.offsetBy(dx: 0, dy: -8 * s)).fill()
@@ -74,7 +74,7 @@ func drawIcon(size: CGFloat) -> NSBitmapImageRep {
 }
 
 let root = URL(filePath: FileManager.default.currentDirectoryPath)
-let iconset = FileManager.default.temporaryDirectory.appending(path: "Pinwall.iconset")
+let iconset = FileManager.default.temporaryDirectory.appending(path: "Pinstill.iconset")
 try? FileManager.default.removeItem(at: iconset)
 try FileManager.default.createDirectory(at: iconset, withIntermediateDirectories: true)
 for base in [16, 32, 128, 256, 512] {

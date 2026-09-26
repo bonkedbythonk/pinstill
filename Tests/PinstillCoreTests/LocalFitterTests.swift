@@ -3,7 +3,7 @@ import Foundation
 import ImageIO
 import Testing
 import UniformTypeIdentifiers
-@testable import PinwallCore
+@testable import PinstillCore
 
 private func writeImage(_ url: URL, width: Int, height: Int) throws {
     let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
@@ -17,18 +17,19 @@ private func writeImage(_ url: URL, width: Int, height: Int) throws {
 }
 
 private func tempFolder() throws -> URL {
-    let url = FileManager.default.temporaryDirectory.appending(path: "pinwall-tests-\(UUID().uuidString)/Wallpapers")
+    let url = FileManager.default.temporaryDirectory.appending(path: "pinstill-tests-\(UUID().uuidString)/Wallpapers")
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     return url
 }
 
 private let target = PixelSize(width: 300, height: 200)
 
-@Test func candidatesSkipExactSizeAndPinwallOutputs() throws {
+@Test func candidatesSkipExactSizeAndPinstillOutputs() throws {
     let folder = try tempFolder()
     try writeImage(folder.appending(path: "exact.png"), width: 300, height: 200)
     try writeImage(folder.appending(path: "big.png"), width: 480, height: 270)
-    try writeImage(folder.appending(path: "pinwall-123.png"), width: 480, height: 270)
+    try writeImage(folder.appending(path: "pinstill-123.png"), width: 480, height: 270)
+    try writeImage(folder.appending(path: "pinwall-456.jpg"), width: 480, height: 270) // pre-rename output
     try Data("not an image".utf8).write(to: folder.appending(path: "notes.txt"))
 
     let names = LocalFitter.candidates(in: folder, target: target).map(\.lastPathComponent)

@@ -1,8 +1,8 @@
 import Foundation
 
-/// Finds out whether a newer Pinwall release exists on GitHub.
+/// Finds out whether a newer Pinstill release exists on GitHub.
 public enum UpdateCheck {
-    public static let releasesPage = URL(string: "https://github.com/bonkedbythonk/pinwall/releases/latest")!
+    public static let releasesPage = URL(string: "https://github.com/bonkedbythonk/pinstill/releases/latest")!
 
     public struct Release: Sendable, Equatable {
         public let version: String

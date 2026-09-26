@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 
 /// Runs the `upscayl-bin` CLI that ships inside Upscayl.app (github.com/upscayl/upscayl).
-/// Upscayl is AGPL and installed separately; Pinwall never bundles it.
+/// Upscayl is AGPL and installed separately; Pinstill never bundles it.
 public struct Upscaler: Sendable {
     public let app: URL
     public let binary: URL

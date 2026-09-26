@@ -1,5 +1,5 @@
 import Testing
-@testable import PinwallCore
+@testable import PinstillCore
 
 private let macbook = PixelSize(width: 3024, height: 1964)
 

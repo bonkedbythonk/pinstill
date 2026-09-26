@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import PinwallCore
+@testable import PinstillCore
 
 private func fixture(_ name: String) throws -> Data {
     let url = try #require(Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "Fixtures"))
@@ -13,7 +13,7 @@ private func fixture(_ name: String) throws -> Data {
 
 @Test func parsesBoardsIncludingSecret() throws {
     let boards = try PinterestAPI.parseBoards(fixture("boards"))
-    #expect(boards.map(\.name) == ["Pinwall", "Desk wallpapers", "Travel"])
+    #expect(boards.map(\.name) == ["Pinstill", "Desk wallpapers", "Travel"])
     #expect(boards[0].id == "200000000000000001")
     #expect(boards[0].isSecret)
     #expect(!boards[2].isSecret)

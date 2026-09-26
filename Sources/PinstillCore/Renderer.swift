@@ -13,7 +13,7 @@ public enum Renderer {
     }
 
     /// Scales to cover `size` (Lanczos), center-crops the rounding remainder, writes JPEG.
-    public static func render(_ input: URL, size: PixelSize, to output: URL, quality: Double = 0.92) throws {
+    public static func render(_ input: URL, size: PixelSize, to output: URL, quality: Double = 0.95) throws {
         guard let image = CIImage(contentsOf: input) else {
             throw CocoaError(.fileReadCorruptFile, userInfo: [NSFilePathErrorKey: input.path(percentEncoded: false)])
         }

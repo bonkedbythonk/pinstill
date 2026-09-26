@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds a universal Pinwall.zip and publishes it as a GitHub release for the version in
+# Builds a universal Pinstill.zip and publishes it as a GitHub release for the version in
 # version.env. Usage: Scripts/release.sh [notes-file]
 set -euo pipefail
 
@@ -21,13 +21,13 @@ swift test
 SIGNING_MODE=adhoc ARCHES="arm64 x86_64" Scripts/package_app.sh release
 
 mkdir -p build
-rm -f build/Pinwall.zip
-# The install script downloads releases/latest/download/Pinwall.zip, so the name never changes.
-ditto -c -k --keepParent Pinwall.app build/Pinwall.zip
+rm -f build/Pinstill.zip
+# The install script downloads releases/latest/download/Pinstill.zip, so the name never changes.
+ditto -c -k --keepParent Pinstill.app build/Pinstill.zip
 
 NOTES=(--generate-notes)
 if [ $# -ge 1 ]; then NOTES=(--notes-file "$1"); fi
 
 git tag "$TAG"
 git push origin "$TAG"
-gh release create "$TAG" build/Pinwall.zip --title "Pinwall $MARKETING_VERSION" "${NOTES[@]}"
+gh release create "$TAG" build/Pinstill.zip --title "Pinstill $MARKETING_VERSION" "${NOTES[@]}"

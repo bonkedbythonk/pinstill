@@ -1,6 +1,6 @@
 import Foundation
 import os
-import PinwallCore
+import PinstillCore
 import WebKit
 
 enum SessionError: Error, CustomStringConvertible {
@@ -25,7 +25,7 @@ final class PinterestSession: NSObject, WKNavigationDelegate {
     var onNavigationFinished: ((URL?) -> Void)?
 
     private var loadWaiters: [CheckedContinuation<Void, Error>] = []
-    private let log = Logger(subsystem: "Pinwall", category: "session")
+    private let log = Logger(subsystem: "Pinstill", category: "session")
 
     static let home = URL(string: "https://www.pinterest.com/")!
     static let login = URL(string: "https://www.pinterest.com/login/")!

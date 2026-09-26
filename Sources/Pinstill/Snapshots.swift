@@ -1,8 +1,8 @@
 import AppKit
-import PinwallCore
+import PinstillCore
 import SwiftUI
 
-/// `Pinwall --snapshot <dir>` renders every screen with made-up demo data to PNGs
+/// `Pinstill --snapshot <dir>` renders every screen with made-up demo data to PNGs
 /// (README screenshots, visual checks) and quits. Touches no real account or files.
 @MainActor
 enum Snapshots {
@@ -24,8 +24,8 @@ enum Snapshots {
                       skipped: [], activity: .processing(done: 1, total: 3), lastResult: nil)
         await snap(MenuView().environment(busy), appearance: .darkAqua, to: folder.appending(path: "menu-syncing.png"))
 
-        let fresh = AppModel(defaults: UserDefaults(suiteName: "pinwall-snapshot-\(UUID())")!,
-                             libraryFile: FileManager.default.temporaryDirectory.appending(path: "pinwall-demo-\(UUID()).json"),
+        let fresh = AppModel(defaults: UserDefaults(suiteName: "pinstill-snapshot-\(UUID())")!,
+                             libraryFile: FileManager.default.temporaryDirectory.appending(path: "pinstill-demo-\(UUID()).json"),
                              demo: true)
         await snap(MenuView().environment(fresh), appearance: .darkAqua, to: folder.appending(path: "menu-welcome.png"))
 
@@ -50,11 +50,11 @@ enum Snapshots {
     ]
 
     private static func demoModel(wallpapers: [Wallpaper]) -> AppModel {
-        let model = AppModel(defaults: UserDefaults(suiteName: "pinwall-snapshot-\(UUID())")!,
-                             libraryFile: FileManager.default.temporaryDirectory.appending(path: "pinwall-demo-\(UUID()).json"),
+        let model = AppModel(defaults: UserDefaults(suiteName: "pinstill-snapshot-\(UUID())")!,
+                             libraryFile: FileManager.default.temporaryDirectory.appending(path: "pinstill-demo-\(UUID()).json"),
                              demo: true)
         model.hasCompletedSetup = true
-        model.outputFolder = URL(filePath: NSHomeDirectory()).appending(path: "Pictures/Pinwall")
+        model.outputFolder = URL(filePath: NSHomeDirectory()).appending(path: "Pictures/Pinstill")
         let skipped = [PinRecord(pin: Pin(id: "s1", title: "", pinURL: URL(string: "https://pinterest.com")!,
                                           imageURL: URL(string: "https://pinterest.com")!, width: 1080, height: 1920,
                                           thumbnailURL: nil),
@@ -91,7 +91,7 @@ enum Snapshots {
 
     /// Colourful abstract "wallpapers" drawn on the fly, so screenshots contain no real pins.
     private static func makeSampleWallpapers() -> [Wallpaper] {
-        let folder = FileManager.default.temporaryDirectory.appending(path: "pinwall-samples")
+        let folder = FileManager.default.temporaryDirectory.appending(path: "pinstill-samples")
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let palettes: [[NSColor]] = [
             [.systemIndigo, .systemPink, .systemOrange],

@@ -1,5 +1,5 @@
 import Testing
-@testable import PinwallCore
+@testable import PinstillCore
 
 @Test func comparesVersionsNumerically() {
     #expect(UpdateCheck.isNewer("0.2.0", than: "0.1.0"))

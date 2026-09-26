@@ -14,6 +14,9 @@ public struct PipelineOptions: Sendable {
     public var minKeep: Double = 0.6
     /// Upscayl passes allowed per image (each up to 4×), for very small originals.
     public var maxUpscalePasses = 2
+    /// Pin id → file name to overwrite when redoing a wallpaper that already exists, so files
+    /// keep their names (desktops showing one image point at it by path).
+    public var existingOutputs: [String: String] = [:]
 
     public init(target: PixelSize, outputFolder: URL, workFolder: URL, upscaler: Upscaler?) {
         self.target = target
@@ -22,7 +25,7 @@ public struct PipelineOptions: Sendable {
         self.upscaler = upscaler
     }
 
-    public static func outputName(for pinID: String) -> String { "pinwall-\(pinID).jpg" }
+    public static func outputName(for pinID: String) -> String { "pinstill-\(pinID).jpg" }
 }
 
 public struct PipelineResult: Sendable {
@@ -58,7 +61,7 @@ public enum Pipeline {
         case .skip(let kept):
             return skipped(kept)
         case .rendered(let rendered, let note):
-            let name = PipelineOptions.outputName(for: pin.id)
+            let name = options.existingOutputs[pin.id] ?? PipelineOptions.outputName(for: pin.id)
             try place(rendered, at: options.outputFolder.appending(path: name))
             return PipelineResult(record: PinRecord(pin: pin, status: .done, note: note, output: name),
                                   timings: timer.timings)
@@ -99,9 +102,13 @@ public enum Pipeline {
         } else if let upscaler = options.upscaler, needed > 1 {
             let model = ModelChooser.model(for: croppedImage, choice: options.model, installed: upscaler.installedModels)
             log("model \(model)")
-            // Each Upscayl pass is at most 4×; tiny originals get a second pass.
+            // The first pass always runs at the model's native 4× and the result is shrunk once
+            // at the end: asking upscayl-bin for 2× or 3× runs the same 4× model and resizes
+            // internally, and that extra resize came out visibly softer. Tiny originals get a
+            // second pass, sized to what's still missing.
             var passes: [Int] = []
-            while let scale = Upscaler.scale(forNeeded: needed), passes.count < options.maxUpscalePasses {
+            while var scale = Upscaler.scale(forNeeded: needed), passes.count < options.maxUpscalePasses {
+                if passes.isEmpty { scale = 4 }
                 let output = work.appending(path: "upscaled-\(passes.count).png")
                 try await timer.time("upscale \(scale)x") {
                     try upscaler.upscale(source, to: output, scale: scale, model: model)

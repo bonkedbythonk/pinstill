@@ -3,7 +3,7 @@ import Observation
 import SwiftUI
 
 @main
-struct PinwallApp: App {
+struct PinstillApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             return
         }
 
+        Migration.fromPinwall()
         if let index = arguments.firstIndex(of: "--profile"), index + 1 < arguments.count {
             model = AppModel(profile: .init(name: arguments[index + 1], hideUpscayl: arguments.contains("--no-upscayl")))
         } else {
@@ -89,7 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     // MARK: Windows
 
     private func showSetup() {
-        show("setup", title: "Set up Pinwall", resizable: false) { [unowned self] in
+        show("setup", title: "Set up Pinstill", resizable: false) { [unowned self] in
             AnyView(SetupView { [weak self] in
                 self?.windows["setup"]?.close()
                 Task { await self?.model.refresh() }
@@ -98,7 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func showSettings() {
-        show("settings", title: "Pinwall settings", resizable: false) { [unowned self] in
+        show("settings", title: "Pinstill settings", resizable: false) { [unowned self] in
             AnyView(SettingsView().environment(model))
         }
     }
@@ -138,6 +139,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             Task { @MainActor in self?.updateIcon() }
         }
         let name = busy ? "photo.badge.arrow.down" : "photo.on.rectangle.angled"
-        statusItem.button?.image = NSImage(systemSymbolName: name, accessibilityDescription: "Pinwall")
+        statusItem.button?.image = NSImage(systemSymbolName: name, accessibilityDescription: "Pinstill")
     }
 }
