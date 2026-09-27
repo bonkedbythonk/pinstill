@@ -57,35 +57,44 @@ struct MenuView: View {
                 .help("Next wallpaper")
             }
             if model.hasCompletedSetup, model.account.username != nil, model.board != nil {
-                Button {
-                    Task { await model.sync() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 13, weight: .medium))
-                        .rotationEffect(.degrees(model.isBusy ? 360 : 0))
-                        .animation(model.isBusy ? .linear(duration: 1).repeatForever(autoreverses: false) : .default,
-                                   value: model.isBusy)
+                if model.isBusy {
+                    // The arrow glyph isn't centred in its box, so spinning it wobbled.
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 16, height: 16)
+                } else {
+                    Button {
+                        Task { await model.sync() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 13, weight: .medium))
+                            .frame(width: 16, height: 16)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Check the board for new pins")
                 }
-                .buttonStyle(.borderless)
-                .disabled(model.isBusy)
-                .help("Check the board for new pins")
             }
-            Menu {
-                Button("Settings…") { model.presentSettings() }
-                    .keyboardShortcut(",")
-                Button("Open wallpaper folder") { model.openOutputFolder() }
-                Button("Run setup again…") { model.presentSetup() }
-                Divider()
-                Button("Quit Pinstill") { NSApp.terminate(nil) }
-                    .keyboardShortcut("q")
+            // A plain button that pops an AppKit menu: a SwiftUI Menu in the popover ignored the
+            // first click while the popover wasn't the key window yet, so it took two.
+            Button {
+                showMoreMenu()
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 13, weight: .medium))
+                    .frame(width: 16, height: 16)
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
+            .buttonStyle(.borderless)
         }
+    }
+
+    private func showMoreMenu() {
+        let menu = NSMenu()
+        menu.addItem(ActionMenuItem("Settings…", key: ",") { model.presentSettings() })
+        menu.addItem(ActionMenuItem("Open wallpaper folder") { model.openOutputFolder() })
+        menu.addItem(ActionMenuItem("Run setup again…") { model.presentSetup() })
+        menu.addItem(.separator())
+        menu.addItem(ActionMenuItem("Quit Pinstill", key: "q") { NSApp.terminate(nil) })
+        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
     }
 
     // MARK: Content
@@ -293,4 +302,19 @@ struct Notice: View {
         .font(.callout)
         .fixedSize(horizontal: false, vertical: true)
     }
+}
+
+/// An NSMenuItem that runs a closure.
+final class ActionMenuItem: NSMenuItem {
+    private let handler: () -> Void
+
+    init(_ title: String, key: String = "", handler: @escaping () -> Void) {
+        self.handler = handler
+        super.init(title: title, action: #selector(run), keyEquivalent: key)
+        target = self
+    }
+
+    required init(coder: NSCoder) { fatalError("not used") }
+
+    @objc private func run() { handler() }
 }

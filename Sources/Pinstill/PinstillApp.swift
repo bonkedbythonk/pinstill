@@ -1,5 +1,4 @@
 import AppKit
-import Observation
 import SwiftUI
 
 @main
@@ -40,10 +39,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         model.presentSetup = { [weak self] in self?.showSetup() }
         model.presentSettings = { [weak self] in self?.showSettings() }
 
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        // Fixed width: the idle and syncing icons differ in width, and a variable-length item
+        // resized mid-sync, which moved the popover anchored to it.
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.target = self
         statusItem.button?.action = #selector(togglePopover)
-        updateIcon()
+        // One icon, always: the syncing variant was drawn ~2pt off from this one, so the icon
+        // jumped whenever a sync started. The popover shows the spinner instead.
+        statusItem.button?.image = NSImage(systemSymbolName: "photo.on.rectangle.angled", accessibilityDescription: "Pinstill")
 
         let hosting = NSHostingController(rootView: MenuView().environment(model))
         hosting.sizingOptions = [.preferredContentSize]
@@ -129,16 +132,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }()
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
-    }
-
-    /// Swap the icon while syncing; re-arms itself on every change of `isBusy`.
-    private func updateIcon() {
-        let busy = withObservationTracking {
-            model.isBusy
-        } onChange: { [weak self] in
-            Task { @MainActor in self?.updateIcon() }
-        }
-        let name = busy ? "photo.badge.arrow.down" : "photo.on.rectangle.angled"
-        statusItem.button?.image = NSImage(systemSymbolName: name, accessibilityDescription: "Pinstill")
     }
 }

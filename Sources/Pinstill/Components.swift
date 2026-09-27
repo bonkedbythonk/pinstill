@@ -58,7 +58,7 @@ struct WallpaperThumbnail: View {
 // MARK: - Print (wallpaper tile)
 
 /// A wallpaper shown as a print on the wall: image in a thin mat, a caption line underneath.
-/// Hovering lifts it and swaps the caption for its two actions.
+/// Clicking puts it on the desktop; hovering lifts it and swaps the caption for its two actions.
 struct WallpaperPrint: View {
     let wallpaper: Wallpaper
     @Environment(AppModel.self) private var model
@@ -78,7 +78,7 @@ struct WallpaperPrint: View {
                 }
                 .offset(y: hovering ? -2 : 0)
                 .shadow(color: .black.opacity(hovering ? 0.25 : 0), radius: 8, y: 4)
-                .onTapGesture { NSWorkspace.shared.open(wallpaper.url) }
+                .onTapGesture { model.setAsDesktop(wallpaper) }
 
             caption
                 .meta(size: 10.5)
@@ -89,7 +89,7 @@ struct WallpaperPrint: View {
         .onHover { hovering = $0 }
         .contextMenu {
             Button("Set as wallpaper") { model.setAsDesktop(wallpaper) }
-            Button("Open") { NSWorkspace.shared.open(wallpaper.url) }
+            Button("Open file") { NSWorkspace.shared.open(wallpaper.url) }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([wallpaper.url]) }
             if let pin = wallpaper.record?.pin {
                 Button("Open pin on Pinterest") { NSWorkspace.shared.open(pin.pinURL) }
@@ -97,14 +97,14 @@ struct WallpaperPrint: View {
             Divider()
             Button("Move to Trash", role: .destructive) { model.trash(wallpaper) }
         }
-        .help(wallpaper.record?.note ?? wallpaper.url.lastPathComponent)
+        .help("Click to put it on your desktop. " + (wallpaper.record?.note ?? wallpaper.url.lastPathComponent))
     }
 
     @ViewBuilder
     private var caption: some View {
         if hovering {
             HStack(spacing: 10) {
-                Button("Set as wallpaper") { model.setAsDesktop(wallpaper) }
+                Button("Open file") { NSWorkspace.shared.open(wallpaper.url) }
                 Button("Remove") { model.trash(wallpaper) }
             }
             .buttonStyle(.link)

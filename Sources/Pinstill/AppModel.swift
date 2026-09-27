@@ -240,7 +240,17 @@ final class AppModel {
         guard !isBusy else { return }
         if case .loggedIn = account, let lastSync, Date.now.timeIntervalSince(lastSync) < 20 { return }
         await checkAccount()
-        if case .loggedIn = account, board != nil, pendingImport == nil, hasCompletedSetup { await sync() }
+        if case .loggedIn = account, board != nil, pendingImport == nil, hasCompletedSetup {
+            await sync()
+        } else if fitOwnImages, hasCompletedSetup {
+            // Own images don't need Pinterest: fit them even while logged out, or a redo that
+            // got interrupted would leave originals sitting in the folder until the next login.
+            activity = .checking
+            let summary = await fitLocalImages()
+            activity = .idle
+            if !summary.isEmpty { lastResult = summary.joined(separator: " · ") }
+            reloadWallpapers()
+        }
     }
 
     func checkAccount() async {
