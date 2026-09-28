@@ -26,6 +26,7 @@ private func makeStore() throws -> URL {
             "A": ["Default": try content(folder: "file:///Users/me/Pictures/Pinstill/", interval: "shuffle_every_30_minutes")],
             "B": ["Default": try content(folder: "file:///Users/me/Other/", interval: "shuffle_every_1_hour")],
             "C": ["Default": try content(folder: nil, image: "file:///Users/me/a.jpg", interval: "shuffle_every_1_day")],
+            "D": ["Default": try content(folder: nil, image: "file:///Users/me/Pictures/Pinstill/pinstill-1.jpg", interval: "shuffle_every_1_day")],
         ],
     ]
     let url = FileManager.default.temporaryDirectory.appending(path: "Index-\(UUID()).plist")
@@ -64,4 +65,20 @@ private let pinstillFolder = URL(filePath: "/Users/me/Pictures/Pinstill", direct
 @Test func everyIntervalHasALabel() {
     #expect(ShuffleInterval.allCases.count == 9)
     #expect(Set(ShuffleInterval.allCases.map(\.label)).count == 9)
+}
+
+@Test func findsDesktopsStuckOnOneImageFromTheFolder() throws {
+    let store = try makeStore()
+    // D shows one image from the folder; C shows an image from elsewhere and isn't counted.
+    #expect(MacRotation.stuckDesktops(in: pinstillFolder, store: store) == 1)
+}
+
+@Test func rotateAllPointsStuckDesktopsBackAtTheFolder() throws {
+    let store = try makeStore()
+    let changed = try MacRotation.rotateAll(folder: pinstillFolder, interval: .every5Minutes, randomly: true, store: store)
+    #expect(changed == 1)
+    #expect(MacRotation.stuckDesktops(in: pinstillFolder, store: store) == 0)
+    // Space A was already rotating and D now is too; both report the folder's settings.
+    let changedAgain = try MacRotation.apply(folder: pinstillFolder, interval: .every1Hour, randomly: nil, store: store)
+    #expect(changedAgain == 2)
 }

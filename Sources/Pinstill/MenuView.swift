@@ -145,8 +145,11 @@ private struct Wall: View {
                 Notice(text: "Pinstill \(update.version) is out.",
                        action: ("Get it", { NSWorkspace.shared.open(update.page) }))
             }
-            if model.rotationMode == .macOS, model.pinnedWallpaper != nil {
-                Notice(text: "Rotation is paused on this desktop.", action: ("Resume", model.resumeRotation))
+            if model.rotationMode == .macOS, model.stuckDesktops > 0 {
+                Notice(text: model.stuckDesktops == 1
+                           ? "One desktop isn't rotating."
+                           : "\(model.stuckDesktops) desktops aren't rotating.",
+                       action: ("Rotate all", model.resumeRotation))
             }
             if model.upscaler == nil {
                 Notice(text: "Upscayl isn't installed, so small pins are only resized.",

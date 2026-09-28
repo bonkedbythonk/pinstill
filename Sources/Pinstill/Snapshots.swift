@@ -17,6 +17,7 @@ enum Snapshots {
 
         let pinned = demoModel(wallpapers: samples)
         pinned.pinnedWallpaper = samples[1].url
+        pinned.loadDemoStuckDesktops(1)
         await snap(MenuView().environment(pinned), appearance: .darkAqua, to: folder.appending(path: "menu-pinned.png"))
 
         let busy = demoModel(wallpapers: samples)

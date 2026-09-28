@@ -77,6 +77,69 @@ public enum MacRotation {
         return changed
     }
 
+    /// How many desktops (Spaces) show one image from `folder` instead of rotating through it,
+    /// e.g. after "set as wallpaper".
+    public static func stuckDesktops(in folder: URL, store: URL = store) -> Int {
+        guard let root = load(store) else { return 0 }
+        var spaces = Set<String>()
+        var elsewhere = false
+        func walk(_ node: Any, space: String?) {
+            if let dict = node as? [String: Any] {
+                if let choices = dict["Choices"] as? [[String: Any]],
+                   choices.contains(where: { isFileChoice($0, in: folder) }) {
+                    if let space { spaces.insert(space) } else { elsewhere = true }
+                }
+                for value in dict.values { walk(value, space: space) }
+            } else if let array = node as? [Any] {
+                array.forEach { walk($0, space: space) }
+            }
+        }
+        if let allSpaces = root["Spaces"] as? [String: Any] {
+            for (id, space) in allSpaces { walk(space, space: id) }
+        }
+        for (key, value) in root where key != "Spaces" { walk(value, space: nil) }
+        return spaces.count + (spaces.isEmpty && elsewhere ? 1 : 0)
+    }
+
+    /// Points every desktop showing one image from `folder` back at the folder itself, with the
+    /// given interval and order. Returns how many entries changed. Call `restartAgent()` after.
+    @discardableResult
+    public static func rotateAll(folder: URL, interval: ShuffleInterval?, randomly: Bool?, store: URL = store) throws -> Int {
+        guard let root = load(store) else { return 0 }
+        let folderConfig = try PropertyListSerialization.data(
+            fromPropertyList: ["type": "imageFolder", "url": ["relative": folder.absoluteString]],
+            format: .binary, options: 0)
+        var changed = 0
+        func fix(_ node: Any) -> Any {
+            if var dict = node as? [String: Any] {
+                if var choices = dict["Choices"] as? [[String: Any]],
+                   let index = choices.firstIndex(where: { isFileChoice($0, in: folder) }) {
+                    choices[index]["Configuration"] = folderConfig
+                    choices[index]["Files"] = [Any]()
+                    dict["Choices"] = choices
+                    var options = (dict["EncodedOptionValues"] as? Data)
+                        .flatMap { try? PropertyListSerialization.propertyList(from: $0, format: nil) as? [String: Any] } ?? [:]
+                    var values = options["values"] as? [String: Any] ?? [:]
+                    if let interval { values["shuffleFrequency"] = ["picker": ["_0": ["id": interval.rawValue]]] }
+                    if let randomly { values["shuffleRandomly"] = ["toggle": ["_0": ["isOn": randomly]]] }
+                    options["values"] = values
+                    if let data = try? PropertyListSerialization.data(fromPropertyList: options, format: .binary, options: 0) {
+                        dict["EncodedOptionValues"] = data
+                    }
+                    changed += 1
+                }
+                for (key, value) in dict where key != "Choices" { dict[key] = fix(value) }
+                return dict
+            }
+            if let array = node as? [Any] { return array.map(fix) }
+            return node
+        }
+        guard let fixed = fix(root) as? [String: Any], changed > 0 else { return 0 }
+        let data = try PropertyListSerialization.data(fromPropertyList: fixed, format: .binary, options: 0)
+        try data.write(to: store, options: .atomic)
+        return changed
+    }
+
     /// WallpaperAgent only reads the store at launch; launchd starts it again right away.
     public static func restartAgent() {
         let kill = Process()
@@ -123,6 +186,17 @@ public enum MacRotation {
             }
         }
         return node
+    }
+
+    /// A single-image choice whose file lives directly in `folder`.
+    private static func isFileChoice(_ choice: [String: Any], in folder: URL) -> Bool {
+        guard let data = choice["Configuration"] as? Data, !data.isEmpty,
+              let config = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
+              config["type"] as? String == "imageFile",
+              let relative = (config["url"] as? [String: Any])?["relative"] as? String,
+              let url = URL(string: relative) else { return false }
+        return url.deletingLastPathComponent().standardizedFileURL.path(percentEncoded: false).trimmingSuffix("/")
+            == folder.standardizedFileURL.path(percentEncoded: false).trimmingSuffix("/")
     }
 
     private static func isFolderChoice(_ choice: [String: Any], folder: URL) -> Bool {

@@ -92,6 +92,9 @@ final class AppModel {
         didSet { store(upscaleModel, key: "upscaleModel") }
     }
 
+    /// Desktops (Spaces) showing one image from the folder instead of rotating through it.
+    private(set) var stuckDesktops = 0
+
     /// A single wallpaper the user set directly; rotation is paused on that desktop until resumed.
     var pinnedWallpaper: URL? {
         didSet { defaults.set(pinnedWallpaper?.path(percentEncoded: false), forKey: "pinnedWallpaper") }
@@ -237,6 +240,7 @@ final class AppModel {
         log.info("refresh requested (busy: \(self.isBusy))")
         target = Screens.largestPixelSize()
         reloadWallpapers()
+        await checkStuckDesktops()
         guard !isBusy else { return }
         if case .loggedIn = account, let lastSync, Date.now.timeIntervalSince(lastSync) < 20 { return }
         await checkAccount()
@@ -539,10 +543,34 @@ final class AppModel {
         }
         guard show(wallpaper.url) else { return }
         pinnedWallpaper = wallpaper.url
+        Task {
+            try? await Task.sleep(for: .seconds(1.5)) // WallpaperAgent writes its store asynchronously
+            await checkStuckDesktops()
+        }
     }
 
+    /// Puts every desktop showing a single Pinstill wallpaper back on the folder's rotation,
+    /// with the chosen interval. Setting the folder through NSWorkspace would only reach the
+    /// current desktop and reset the interval to 30 minutes.
     func resumeRotation() {
-        useFolderAsDesktopWallpaper()
+        pinnedWallpaper = nil
+        guard !isDemo else { stuckDesktops = 0; return }
+        let folder = outputFolder, interval = macInterval, randomly = macRandomly
+        Task {
+            let changed = await Task.detached { () -> Int? in
+                guard let changed = try? MacRotation.rotateAll(folder: folder, interval: interval, randomly: randomly) else { return nil }
+                if changed > 0 { MacRotation.restartAgent() }
+                return changed
+            }.value
+            if changed == nil { errorMessage = "Couldn't change macOS's wallpaper settings." }
+            await checkStuckDesktops()
+        }
+    }
+
+    func checkStuckDesktops() async {
+        guard !isDemo, rotationMode == .macOS else { stuckDesktops = 0; return }
+        let folder = outputFolder
+        stuckDesktops = await Task.detached { MacRotation.stuckDesktops(in: folder) }.value
     }
 
     /// Point macOS's wallpaper rotation at the output folder on every screen (current Space),
@@ -739,6 +767,8 @@ final class AppModel {
     }
 
     // MARK: Demo (screenshots, UI checks)
+
+    func loadDemoStuckDesktops(_ count: Int) { stuckDesktops = count }
 
     func loadDemo(account: Account, boards: [Board], board: Board?, wallpapers: [Wallpaper],
                   skipped: [PinRecord], activity: Activity, lastResult: String?, pendingImport: [Pin]? = nil) {
