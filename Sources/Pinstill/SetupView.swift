@@ -92,12 +92,15 @@ struct SetupView: View {
             if let upscaler = model.upscaler {
                 Row(label: "Found", text: "Upscayl \(upscaler.version ?? "") with \(upscaler.installedModels.count) models. Pinstill picks Digital art for anime and illustrations and High fidelity for photos, per image.")
             } else {
-                Row(label: "Not found", text: "Without Upscayl, small pins are only resized and look soft. Install it, then check again.") {
-                    HStack(spacing: 14) {
-                        Button("Download Upscayl") { NSWorkspace.shared.open(Upscaler.downloadURL) }
-                        Button("Check again") { model.refreshUpscaler() }
-                    }
-                    .buttonStyle(.link)
+                Row(label: "Not installed", text: "Pinstill can install it for you. It's a download of about 370 MB from Upscayl's own page on GitHub, and takes a minute or two. Without it, small pins are only resized and look soft.") {
+                    UpscaylInstallControl()
+                        .task {
+                            // Someone installing it by hand shouldn't have to come back and press anything.
+                            while !Task.isCancelled, model.upscaler == nil {
+                                try? await Task.sleep(for: .seconds(2))
+                                if model.upscaylInstall == .idle { model.refreshUpscaler() }
+                            }
+                        }
                 }
             }
         }

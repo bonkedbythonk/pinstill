@@ -296,6 +296,41 @@ final class AppModel {
         upscaler = profile?.hideUpscayl == true ? nil : Upscaler.locate()
     }
 
+    enum UpscaylInstall: Equatable {
+        case idle
+        case downloading(Double)
+        case installing
+        case failed(String)
+    }
+
+    private(set) var upscaylInstall: UpscaylInstall = .idle
+
+    /// Downloads Upscayl's official DMG and puts the app in Applications.
+    func installUpscayl() async {
+        switch upscaylInstall {
+        case .downloading, .installing: return
+        case .idle, .failed: break
+        }
+        upscaylInstall = .downloading(0)
+        do {
+            let app = try await UpscaylInstaller.install { [weak self] step in
+                Task { @MainActor in
+                    switch step {
+                    case .downloading(let fraction): self?.upscaylInstall = .downloading(fraction)
+                    case .installing: self?.upscaylInstall = .installing
+                    }
+                }
+            }
+            // Launch Services can take a moment to learn about a new app; use the path we know.
+            upscaler = Upscaler.at(app) ?? Upscaler.locate()
+            upscaylInstall = .idle
+        } catch let error as UpscaylInstaller.InstallError {
+            upscaylInstall = .failed(error.description)
+        } catch {
+            upscaylInstall = .failed("The download didn't finish. Check your connection and try again.")
+        }
+    }
+
     /// Login page navigations: once Pinterest leaves the login page, check whether we're in.
     private func navigationFinished(_ url: URL?) async {
         guard account == .loggedOut, let path = url?.path(percentEncoded: false), !path.contains("login") else { return }
@@ -769,6 +804,11 @@ final class AppModel {
     // MARK: Demo (screenshots, UI checks)
 
     func loadDemoStuckDesktops(_ count: Int) { stuckDesktops = count }
+
+    func loadDemoUpscaylMissing(_ install: UpscaylInstall) {
+        upscaler = nil
+        upscaylInstall = install
+    }
 
     func loadDemo(account: Account, boards: [Board], board: Board?, wallpapers: [Wallpaper],
                   skipped: [PinRecord], activity: Activity, lastResult: String?, pendingImport: [Pin]? = nil) {

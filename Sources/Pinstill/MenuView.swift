@@ -152,8 +152,13 @@ private struct Wall: View {
                        action: ("Rotate all", model.resumeRotation))
             }
             if model.upscaler == nil {
-                Notice(text: "Upscayl isn't installed, so small pins are only resized.",
-                       action: ("Get Upscayl", { NSWorkspace.shared.open(Upscaler.downloadURL) }))
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Upscayl isn't installed, so small pins are only resized.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    UpscaylInstallControl().font(.callout)
+                }
             }
             if model.wallpapers.isEmpty {
                 Text("Nothing here yet. Save a few pins to \(model.board?.name ?? "your board") on Pinterest, then click the arrow above.")

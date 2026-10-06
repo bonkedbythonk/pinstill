@@ -122,6 +122,42 @@ struct WallpaperPrint: View {
     }
 }
 
+// MARK: - Upscayl
+
+/// "Install Upscayl" and what happens after pressing it: download progress, installing,
+/// or what went wrong with a way to retry or get it by hand.
+struct UpscaylInstallControl: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        switch model.upscaylInstall {
+        case .idle:
+            Button("Install Upscayl") { Task { await model.installUpscayl() } }
+        case .downloading(let fraction):
+            VStack(alignment: .leading, spacing: 4) {
+                ProgressView(value: fraction).tint(Theme.pinRed)
+                Text("Downloading Upscayl, \(Int(fraction * 100))%")
+                    .meta()
+                    .foregroundStyle(.secondary)
+            }
+        case .installing:
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Putting Upscayl in Applications").foregroundStyle(.secondary)
+            }
+        case .failed(let message):
+            VStack(alignment: .leading, spacing: 4) {
+                Text(message).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 14) {
+                    Button("Try again") { Task { await model.installUpscayl() } }
+                    Button("Download it yourself") { NSWorkspace.shared.open(UpscaylInstaller.releasesPage) }
+                }
+                .buttonStyle(.link)
+            }
+        }
+    }
+}
+
 // MARK: - Boards
 
 struct BoardRow: View {

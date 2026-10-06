@@ -74,7 +74,7 @@ say "Installed Pinstill ${VERSION} in $INSTALL_DIR."
 
 if ! mdfind "kMDItemCFBundleIdentifier == 'org.upscayl.Upscayl'" | grep -q .; then
     say ""
-    say "Pinstill uses Upscayl (free) to upscale small pins. Get it at https://upscayl.org"
+    say "Pinstill uses Upscayl (free) to upscale small pins. Its setup window can install it for you."
 fi
 
 [ -n "${PINSTILL_NO_OPEN:-}" ] || open "$APP"

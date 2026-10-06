@@ -189,10 +189,7 @@ private struct UpscalingSettings: View {
                     }
                 } else {
                     LabeledContent("Not installed") {
-                        HStack {
-                            Button("Download…") { NSWorkspace.shared.open(Upscaler.downloadURL) }
-                            Button("Check again") { model.refreshUpscaler() }
-                        }
+                        UpscaylInstallControl()
                     }
                 }
             }

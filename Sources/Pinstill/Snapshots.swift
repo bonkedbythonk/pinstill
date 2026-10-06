@@ -36,6 +36,14 @@ enum Snapshots {
                        to: folder.appending(path: "setup-\(step).png"))
         }
 
+        for (name, state) in [("missing", AppModel.UpscaylInstall.idle), ("downloading", .downloading(0.42)),
+                              ("failed", .failed("The download didn't finish. Check your connection and try again."))] {
+            let model = demoModel(wallpapers: samples)
+            model.loadDemoUpscaylMissing(state)
+            await snap(SetupView(onFinish: {}, step: .upscayl).environment(model), appearance: .darkAqua,
+                       to: folder.appending(path: "setup-upscayl-\(name).png"))
+        }
+
         for tab in [SettingsView.Tab.general, .rotation, .pinterest, .upscaling, .about] {
             let model = demoModel(wallpapers: samples)
             await snap(SettingsView(tab: tab).environment(model), appearance: .darkAqua,

@@ -45,7 +45,7 @@ curl -fsSL https://raw.githubusercontent.com/bonkedbythonk/pinstill/main/Scripts
 
 Run the same line again to update. Pinstill also tells you when a new version is out.
 
-For the upscaling, install [Upscayl](https://upscayl.org) (free) too. The setup window walks you through the rest: your Pinterest login, a folder and a board.
+The setup window walks you through the rest: it installs [Upscayl](https://upscayl.org) (free, used for the upscaling) for you if you don't have it, then asks for your Pinterest login, a folder and a board.
 
 <details>
 <summary>Installing by hand</summary>
