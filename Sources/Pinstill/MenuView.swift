@@ -38,15 +38,29 @@ struct MenuView: View {
             AppIconView(size: 26)
             VStack(alignment: .leading, spacing: 1) {
                 Text("Pinstill").font(.system(size: 14, weight: .semibold))
-                if let board = model.board, model.hasCompletedSetup {
-                    Text(board.name + (board.isSecret ? " · secret board" : ""))
-                        .meta(size: 11)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                if model.hasBoards, model.hasCompletedSetup {
+                    if model.links.count == 1 {
+                        Text(model.links[0].board.name + (model.links[0].board.isSecret ? " · secret board" : ""))
+                            .meta(size: 11)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    } else {
+                        Button { showBoardMenu() } label: {
+                            HStack(spacing: 3) {
+                                Text(model.shownLink?.board.name ?? "All boards").lineLimit(1)
+                                Image(systemName: "chevron.up.chevron.down").font(.system(size: 8, weight: .semibold))
+                            }
+                            .meta(size: 11)
+                            .foregroundStyle(.secondary)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .help("Choose which board's wallpapers to show")
+                    }
                 }
             }
             Spacer()
-            if model.rotationMode == .pinstill, !model.wallpapers.isEmpty {
+            if model.rotationMode == .pinstill, !model.allWallpapers.isEmpty {
                 Button {
                     model.nextWallpaper()
                 } label: {
@@ -56,7 +70,7 @@ struct MenuView: View {
                 .buttonStyle(.borderless)
                 .help("Next wallpaper")
             }
-            if model.hasCompletedSetup, model.account.username != nil, model.board != nil {
+            if model.hasCompletedSetup, model.account.username != nil, model.hasBoards {
                 if model.isBusy {
                     // The arrow glyph isn't centred in its box, so spinning it wobbled.
                     ProgressView()
@@ -87,10 +101,34 @@ struct MenuView: View {
         }
     }
 
+    /// Which board's wallpapers the wall shows. A view only: syncing and rotation cover every board.
+    private func showBoardMenu() {
+        let menu = NSMenu()
+        let all = ActionMenuItem("All boards") { model.shownBoardID = nil }
+        all.state = model.shownLink == nil ? .on : .off
+        menu.addItem(all)
+        menu.addItem(.separator())
+        for link in model.links {
+            let count = model.allWallpapers.count { $0.linkID == link.id }
+            let item = ActionMenuItem("\(link.board.name)  (\(count))") { model.shownBoardID = link.id }
+            item.state = model.shownLink?.id == link.id ? .on : .off
+            menu.addItem(item)
+        }
+        menu.addItem(.separator())
+        menu.addItem(ActionMenuItem("Add or remove boards…") { model.presentSettings() })
+        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+    }
+
     private func showMoreMenu() {
         let menu = NSMenu()
         menu.addItem(ActionMenuItem("Settings…", key: ",") { model.presentSettings() })
-        menu.addItem(ActionMenuItem("Open wallpaper folder") { model.openOutputFolder() })
+        if model.links.count > 1 {
+            for link in model.links {
+                menu.addItem(ActionMenuItem("Open folder of \(link.board.name)") { model.openFolder(link.folder) })
+            }
+        } else {
+            menu.addItem(ActionMenuItem("Open wallpaper folder") { model.openFolder() })
+        }
         menu.addItem(ActionMenuItem("Run setup again…") { model.presentSetup() })
         menu.addItem(.separator())
         menu.addItem(ActionMenuItem("Quit Pinstill", key: "q") { NSApp.terminate(nil) })
@@ -118,7 +156,7 @@ struct MenuView: View {
                        text: "Pinterest ended the session. Log in again and Pinstill picks up where it left off.",
                        button: ("Log in", model.presentLogin))
             case .loggedIn:
-                if model.board == nil {
+                if !model.hasBoards {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Which board holds your wallpapers?").font(.system(size: 13, weight: .semibold))
                         BoardList(maxHeight: 240)
@@ -151,6 +189,10 @@ private struct Wall: View {
                            : "\(model.stuckDesktops) desktops aren't rotating.",
                        action: ("Rotate all", model.resumeRotation))
             }
+            if model.displayOutgrewWallpapers {
+                Notice(text: "Bigger display connected.",
+                       action: ("Redo wallpapers", { Task { await model.reprocessEverything() } }))
+            }
             if model.upscaler == nil {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Upscayl isn't installed, so small pins are only resized.")
@@ -161,11 +203,24 @@ private struct Wall: View {
                 }
             }
             if model.wallpapers.isEmpty {
-                Text("Nothing here yet. Save a few pins to \(model.board?.name ?? "your board") on Pinterest, then click the arrow above.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.vertical, 18)
+                VStack(alignment: .leading, spacing: 8) {
+                    if model.leftOutReasons.isEmpty {
+                        Text("Nothing here yet. Save a few pins to \(model.shownLink?.board.name ?? (model.links.count == 1 ? model.links[0].board.name : "your boards")) on Pinterest, then click the arrow above.")
+                    } else {
+                        Text("No wallpapers yet.").foregroundStyle(.primary)
+                        ForEach(model.leftOutReasons, id: \.self) { Text($0) }
+                        if !model.tallSkippedPins.isEmpty {
+                            Button("Crop the tall pins anyway") { Task { await model.useAnyway(model.tallSkippedPins) } }
+                                .buttonStyle(.link)
+                                .foregroundStyle(Color.accentColor)
+                                .disabled(model.isBusy)
+                        }
+                    }
+                }
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.vertical, 18)
             } else {
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
@@ -188,10 +243,13 @@ private struct Wall: View {
                         Text(next, style: .relative)
                     }
                     if !model.skippedPins.isEmpty {
-                        Text("· \(model.skippedPins.count) skipped").help(skippedHelp)
+                        Text("·")
+                        Button("\(model.skippedPins.count) skipped") { showSkippedMenu() }
+                            .buttonStyle(.link)
+                            .help(skippedHelp)
                     }
                     Spacer()
-                    Button("Show in Finder") { model.openOutputFolder() }
+                    Button("Show in Finder") { showFolders() }
                         .buttonStyle(.link)
                 }
                 .meta()
@@ -204,6 +262,41 @@ private struct Wall: View {
     private var gridHeight: CGFloat {
         let rows = CGFloat((model.wallpapers.count + 1) / 2)
         return min(rows * 124 + (rows - 1) * 12 + 5, 3.5 * 136)
+    }
+
+    private func showFolders() {
+        if let shown = model.shownLink { model.openFolder(shown.folder); return }
+        guard model.links.count > 1 else { model.openFolder(); return }
+        let menu = NSMenu()
+        for link in model.links {
+            menu.addItem(ActionMenuItem(link.board.name) { model.openFolder(link.folder) })
+        }
+        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+    }
+
+    /// One submenu per skipped pin, so a pin that was too tall can still be made into a wallpaper.
+    private func showSkippedMenu() {
+        let menu = NSMenu()
+        if model.tallSkippedPins.count > 1 {
+            menu.addItem(ActionMenuItem("Crop all \(model.tallSkippedPins.count) tall pins anyway") {
+                Task { await model.useAnyway(model.tallSkippedPins) }
+            })
+            menu.addItem(.separator())
+        }
+        for record in model.skippedPins.prefix(12) {
+            let name = record.pin.title.isEmpty ? "Pin \(record.pin.id)" : String(record.pin.title.prefix(40))
+            let item = NSMenuItem(title: name, action: nil, keyEquivalent: "")
+            let submenu = NSMenu()
+            submenu.addItem(NSMenuItem(title: record.note, action: nil, keyEquivalent: ""))
+            submenu.addItem(.separator())
+            if record.status == .skippedShape {
+                submenu.addItem(ActionMenuItem("Crop it anyway") { Task { await model.useAnyway([record]) } })
+            }
+            submenu.addItem(ActionMenuItem("Open on Pinterest") { NSWorkspace.shared.open(record.pin.pinURL) })
+            item.submenu = submenu
+            menu.addItem(item)
+        }
+        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
     }
 
     private var skippedHelp: String {
@@ -234,7 +327,7 @@ private struct StatusLine: View {
             let result = model.lastResult ?? "Ready"
             guard let lastSync = model.lastSync else { return result }
             return "\(result) · \(lastSync.formatted(.relative(presentation: .named)))"
-        case .checking: return "Checking \(model.board?.name ?? "the board")…"
+        case .checking: return "Checking \(model.links.count == 1 ? model.links[0].board.name : "your boards")…"
         case .processing(let done, let total): return "Upscaling pin \(done + 1) of \(total)…"
         case .fitting(let done, let total): return "Fitting your image \(done + 1) of \(total)…"
         }
@@ -255,7 +348,7 @@ struct ImportPrompt: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("\(model.board?.name ?? "This board") already has \(pins.count) pins")
+            Text("\(model.pendingImportLink?.board.name ?? "This board") already has \(pins.count) pins")
                 .font(.system(size: 13, weight: .semibold))
             Text("Turn them all into wallpapers now, or start from the next pin you save? Each pin that needs upscaling takes around 5 to 15 seconds.")
                 .font(.callout)

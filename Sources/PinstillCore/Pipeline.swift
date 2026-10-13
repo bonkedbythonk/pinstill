@@ -11,7 +11,7 @@ public struct PipelineOptions: Sendable {
     public var upscaler: Upscaler?
     public var model: UpscaleModel = .automatic
     /// Skip when cropping to the screen's shape would keep less than this share of the image.
-    public var minKeep: Double = 0.6
+    public var minKeep: Double = PipelineOptions.defaultMinKeep
     /// Upscayl passes allowed per image (each up to 4×), for very small originals.
     public var maxUpscalePasses = 2
     /// Pin id → file name to overwrite when redoing a wallpaper that already exists, so files
@@ -25,6 +25,11 @@ public struct PipelineOptions: Sendable {
         self.upscaler = upscaler
     }
 
+    public static let defaultMinKeep = 0.6
+    /// Written into a record's note when the user had a too-tall pin cropped anyway, so redoing
+    /// it later crops it again instead of skipping it.
+    public static let croppedAnywayMarker = "cropped anyway"
+
     public static func outputName(for pinID: String) -> String { "pinstill-\(pinID).jpg" }
 }
 
@@ -36,7 +41,9 @@ public struct PipelineResult: Sendable {
 public enum Pipeline {
     /// Download → crop to screen shape → upscale if too small → exact-size JPEG in the output folder.
     /// Blocking work (Vision, Core Image, upscayl-bin); call from a background task.
-    public static func process(_ pin: Pin, options: PipelineOptions,
+    /// A hand-picked `crop` (normalized, see `CropGeometry`) replaces the automatic one and is
+    /// never skipped for its shape.
+    public static func process(_ pin: Pin, options: PipelineOptions, crop: CGRect? = nil,
                                log: (String) -> Void = { _ in }) async throws -> PipelineResult {
         var timer = Timer()
         func skipped(_ kept: Double) -> PipelineResult {
@@ -45,7 +52,7 @@ public enum Pipeline {
         }
 
         // Size known up front (Pinterest API) → skip tall images without downloading them.
-        if let w = pin.width, let h = pin.height {
+        if crop == nil, let w = pin.width, let h = pin.height {
             let kept = Framer.keptFraction(width: w, height: h, target: options.target)
             if kept < options.minKeep { return skipped(kept) }
         }
@@ -57,13 +64,13 @@ public enum Pipeline {
         let original = try await timer.time("download") {
             try await ImageFetcher.download(pin.imageURL, to: work, name: "original")
         }
-        switch try await fit(original, work: work, options: options, timer: &timer, log: log) {
+        switch try await fit(original, work: work, options: options, crop: crop, timer: &timer, log: log) {
         case .skip(let kept):
             return skipped(kept)
         case .rendered(let rendered, let note):
             let name = options.existingOutputs[pin.id] ?? PipelineOptions.outputName(for: pin.id)
             try place(rendered, at: options.outputFolder.appending(path: name))
-            return PipelineResult(record: PinRecord(pin: pin, status: .done, note: note, output: name),
+            return PipelineResult(record: PinRecord(pin: pin, status: .done, note: note, output: name, crop: crop),
                                   timings: timer.timings)
         }
     }
@@ -75,12 +82,23 @@ public enum Pipeline {
     }
 
     /// Crop `original` to the screen's shape, upscale as needed, render an exact-size JPEG into `work`.
-    static func fit(_ original: URL, work: URL, options: PipelineOptions, timer: inout Timer,
+    static func fit(_ original: URL, work: URL, options: PipelineOptions, crop: CGRect? = nil, timer: inout Timer,
                     log: (String) -> Void) async throws -> FitResult {
         let image = try Framer.loadImage(original)
         log("original \(image.width)x\(image.height)")
 
-        let decision = await timer.time("frame") { Framer.decide(image, target: options.target, minKeep: options.minKeep) }
+        let decision: FrameDecision
+        if let crop {
+            let bounds = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+            let fitted = CropGeometry.refit(crop, imageWidth: image.width, imageHeight: image.height,
+                                            aspect: options.target.aspect)
+            let pixels = CGRect(x: fitted.minX * bounds.width, y: fitted.minY * bounds.height,
+                                width: fitted.width * bounds.width, height: fitted.height * bounds.height)
+                .integral.intersection(bounds)
+            decision = .crop(pixels, keptFraction: pixels.width * pixels.height / (bounds.width * bounds.height))
+        } else {
+            decision = await timer.time("frame") { Framer.decide(image, target: options.target, minKeep: options.minKeep) }
+        }
         let rect: CGRect, kept: Double
         switch decision {
         case .crop(let r, let k): (rect, kept) = (r, k)
@@ -122,6 +140,8 @@ public enum Pipeline {
             }
             if needed > 1.05 { note += " (still low-res)" }
         }
+
+        if crop == nil, kept < PipelineOptions.defaultMinKeep { note += ", " + PipelineOptions.croppedAnywayMarker }
 
         let rendered = work.appending(path: "rendered.jpg")
         try await timer.time("render") { try Renderer.render(source, size: target, to: rendered) }

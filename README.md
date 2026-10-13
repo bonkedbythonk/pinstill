@@ -25,6 +25,12 @@ Called Pinwall until 0.2.0. Installing Pinstill replaces it and keeps your setti
 - Puts the results in a folder your Mac rotates through, on every desktop.
 - Lets you set one as your wallpaper right away, or remove it.
 - Sets how often they change, from every 5 seconds to once a day. macOS can keep rotating with Pinstill closed, or Pinstill can do it (any interval, newest first, a next button) while it's open.
+- Can crop a pin that was skipped for being too tall anyway, from the "skipped" list in the menu.
+- Can check your board when your Mac wakes up (at most once an hour) and tell you when it adds wallpapers. Off by default.
+- Notices when a bigger display is connected and offers to redo the wallpapers for it.
+- Lets you adjust the crop of any wallpaper: right-click it, choose "Adjust crop…", drag the box and zoom. It's remade from the original and kept when you redo all wallpapers.
+- Follows several boards, each with its own folder. Add them under Settings, Pinterest. Pinstill rotates through all of them. The macOS rotation settings in Pinstill are written to every board's folder; after pointing a desktop at a new folder in System Settings, pick the interval again.
+- Optional keyboard shortcuts for the next wallpaper and for removing the current one, when Pinstill does the rotating.
 
 It lives in the menu bar. Open it after you've saved some pins, let it sync, quit it again.
 

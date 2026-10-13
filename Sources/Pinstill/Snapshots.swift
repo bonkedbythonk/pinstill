@@ -20,6 +20,37 @@ enum Snapshots {
         pinned.loadDemoStuckDesktops(1)
         await snap(MenuView().environment(pinned), appearance: .darkAqua, to: folder.appending(path: "menu-pinned.png"))
 
+        let empty = demoModel(wallpapers: [])
+        empty.loadDemo(account: .loggedIn("you"), boards: demoBoards, board: demoBoards[0], wallpapers: [],
+                       skipped: empty.leftOutPins, activity: .idle, lastResult: "0 added · 1 skipped")
+        await snap(MenuView().environment(empty), appearance: .darkAqua, to: folder.appending(path: "menu-empty-skipped.png"))
+
+        let outgrown = demoModel(wallpapers: samples)
+        outgrown.loadDemoRenderedTarget(PixelSize(width: outgrown.target.width / 2, height: outgrown.target.height / 2))
+        await snap(MenuView().environment(outgrown), appearance: .darkAqua, to: folder.appending(path: "menu-bigger-display.png"))
+
+        let pinstillMode = demoModel(wallpapers: samples)
+        pinstillMode.rotationMode = .pinstill
+        await snap(SettingsView(tab: .rotation).environment(pinstillMode), appearance: .darkAqua,
+                   to: folder.appending(path: "settings-rotation-pinstill.png"))
+
+        let editing = demoModel(wallpapers: samples)
+        await snap(CropEditorView(record: samples[0].record!, boardID: nil, originalURL: samples[0].url).environment(editing),
+                   appearance: .darkAqua, to: folder.appending(path: "crop-editor.png"))
+
+        let several = demoModel(wallpapers: samples)
+        several.loadDemo(account: .loggedIn("you"), boards: demoBoards, board: demoBoards[0], wallpapers: samples,
+                         skipped: [], activity: .idle, lastResult: "Wallpapers: 2 added · Anime scenery: 1 added",
+                         extraBoards: [demoBoards[1]])
+        await snap(MenuView().environment(several), appearance: .darkAqua, to: folder.appending(path: "menu-two-boards.png"))
+        let shownOne = demoModel(wallpapers: samples)
+        shownOne.loadDemo(account: .loggedIn("you"), boards: demoBoards, board: demoBoards[0], wallpapers: samples,
+                          skipped: [], activity: .idle, lastResult: "Up to date", extraBoards: [demoBoards[1]])
+        shownOne.shownBoardID = demoBoards[1].id
+        await snap(MenuView().environment(shownOne), appearance: .darkAqua, to: folder.appending(path: "menu-one-board-shown.png"))
+        await snap(SettingsView(tab: .pinterest).environment(several), appearance: .darkAqua,
+                   to: folder.appending(path: "settings-pinterest-two-boards.png"))
+
         let busy = demoModel(wallpapers: samples)
         busy.loadDemo(account: .loggedIn("you"), boards: demoBoards, board: demoBoards[0], wallpapers: samples,
                       skipped: [], activity: .processing(done: 1, total: 3), lastResult: nil)

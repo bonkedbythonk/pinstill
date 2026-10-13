@@ -1,4 +1,5 @@
 import AppKit
+import PinstillCore
 import SwiftUI
 
 @main
@@ -38,6 +39,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         model.presentLogin = { [weak self] in self?.showLogin() }
         model.presentSetup = { [weak self] in self?.showSetup() }
         model.presentSettings = { [weak self] in self?.showSettings() }
+        model.presentCropEditor = { [weak self] record, boardID in self?.showCropEditor(record, boardID: boardID) }
+        model.popoverIsShown = { [weak self] in self?.popover.isShown ?? false }
 
         // Fixed width: the idle and syncing icons differ in width, and a variable-length item
         // resized mid-sync, which moved the popover anchored to it.
@@ -104,6 +107,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private func showSettings() {
         show("settings", title: "Pinstill settings", resizable: false) { [unowned self] in
             AnyView(SettingsView().environment(model))
+        }
+    }
+
+    private func showCropEditor(_ record: PinRecord, boardID: String?) {
+        // A window's content is built once; every pin needs its own editor.
+        windows["crop"]?.close()
+        windows["crop"] = nil
+        show("crop", title: "Adjust crop", resizable: false) { [unowned self] in
+            AnyView(CropEditorView(record: record, boardID: boardID, onClose: { [weak self] in self?.windows["crop"]?.close() }).environment(model))
         }
     }
 

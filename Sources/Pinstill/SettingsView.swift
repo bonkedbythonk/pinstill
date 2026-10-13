@@ -35,6 +35,15 @@ private struct GeneralSettings: View {
     var body: some View {
         @Bindable var model = model
         Form {
+            if model.links.count > 1 {
+                Section {
+                    Text("Each board has its own folder. See them under Pinterest.")
+                        .foregroundStyle(.secondary)
+                } footer: {
+                    Text("Wallpapers are made at \(model.target.width)×\(model.target.height), the size of this Mac's largest display. How often they change is under Rotation.")
+                        .settingsFooter()
+                }
+            } else {
             Section {
                 LabeledContent("Wallpaper folder") {
                     HStack {
@@ -42,7 +51,7 @@ private struct GeneralSettings: View {
                             .lineLimit(1)
                             .truncationMode(.middle)
                             .foregroundStyle(.secondary)
-                        Button("Choose…") { model.chooseOutputFolder() }
+                        Button("Choose…") { model.chooseFolder() }
                     }
                 }
                 LabeledContent("Desktop") {
@@ -57,12 +66,24 @@ private struct GeneralSettings: View {
                 Text("Wallpapers are made at \(model.target.width)×\(model.target.height), the size of this Mac's largest display. How often they change is under Rotation.")
                     .settingsFooter()
             }
+            }
             Section {
                 Toggle(isOn: $model.fitOwnImages) {
                     Text("Fit images I put in the folder myself, too")
                     Text("Cropped and upscaled like pins. The originals move to \(LocalFitter.originalsFolder(for: model.outputFolder).lastPathComponent).")
                 }
                 Toggle("Open Pinstill when I log in", isOn: $model.launchAtLogin)
+            }
+            Section {
+                Toggle(isOn: $model.syncOnWake) {
+                    Text("Check the board when my Mac wakes up")
+                    Text("At most once an hour, and only while Pinstill is open in the menu bar. Otherwise it checks when you open it.")
+                }
+                Toggle(isOn: $model.notifyOnNew) {
+                    Text("Tell me when that finds new wallpapers")
+                    Text("If this switches itself off, allow notifications for Pinstill in System Settings.")
+                }
+                .disabled(!model.syncOnWake)
             }
         }
         .formStyle(.grouped)
@@ -104,7 +125,7 @@ private struct RotationSettings: View {
                         get: { model.macRandomly ?? true },
                         set: { model.macRandomly = $0; Task { await model.applyMacRotation() } }))
                 } footer: {
-                    Text("These are the same settings as System Settings, Wallpaper, for desktops that use this folder. macOS has no public way to change them, so Pinstill edits its settings file and restarts the wallpaper process; your desktop may blink once. A macOS update could stop this from working.")
+                    Text("These are the same settings as System Settings, Wallpaper, for desktops that use a board's folder. macOS has no public way to change them, so Pinstill edits its settings file and restarts the wallpaper process; your desktop may blink once. A macOS update could stop this from working.")
                         .settingsFooter()
                 }
             } else {
@@ -118,10 +139,14 @@ private struct RotationSettings: View {
                     }
                     LabeledContent("Now") {
                         Button("Next wallpaper") { model.nextWallpaper() }
-                            .disabled(model.wallpapers.isEmpty)
+                            .disabled(model.allWallpapers.isEmpty)
+                    }
+                    Toggle(isOn: $model.hotKeysEnabled) {
+                        Text("Keyboard shortcuts")
+                        Text("Control-Option-Command-Right arrow: next wallpaper. Control-Option-Command-Delete: move the current one to the Trash.")
                     }
                 } footer: {
-                    Text("Every desktop gets the current wallpaper when you switch to it.")
+                    Text("Every desktop gets the current wallpaper when you switch to it. With several boards, wallpapers from all of them are mixed.")
                         .settingsFooter()
                 }
             }
@@ -151,6 +176,16 @@ private struct PinterestSettings: View {
                 }
             }
             if model.account.username != nil {
+                if model.hasBoards {
+                    Section {
+                        ForEach(model.links) { LinkRow(link: $0) }
+                    } header: {
+                        Text("Your boards")
+                    } footer: {
+                        Text("Each board has its own folder. Pinstill rotates through all of them. Stopping a board keeps its wallpapers and what Pinstill knows about its pins.")
+                            .settingsFooter()
+                    }
+                }
                 Section {
                     BoardList(maxHeight: 220)
                     if let pending = model.pendingImport {
@@ -158,19 +193,49 @@ private struct PinterestSettings: View {
                     }
                 } header: {
                     HStack {
-                        Text("Board")
+                        Text(model.hasBoards ? "Add a board" : "Board")
                         Spacer()
                         Button("Reload") { Task { await model.loadBoards() } }
                             .buttonStyle(.link)
                             .font(.caption)
                     }
                 } footer: {
-                    Text("Pins saved to this board become wallpapers the next time Pinstill syncs.")
+                    Text("Pins saved to a board become wallpapers the next time Pinstill syncs.")
                         .settingsFooter()
                 }
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+private struct LinkRow: View {
+    let link: BoardLink
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(link.board.name)
+                Text(link.folderPath.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer()
+            Menu {
+                Button("Choose another folder…") { model.chooseFolder(for: link) }
+                Button("Show in Finder") { model.openFolder(link.folder) }
+                Divider()
+                Button("Stop following this board", role: .destructive) { model.unlink(link.id) }
+                    .disabled(model.isBusy)
+            } label: {
+                Image(systemName: "ellipsis")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+        }
     }
 }
 
@@ -209,7 +274,7 @@ private struct UpscalingSettings: View {
             Section {
                 LabeledContent("Redo all wallpapers") {
                     Button("Upscale everything again…") { confirmRedo = true }
-                        .disabled(model.isBusy || model.board == nil)
+                        .disabled(model.isBusy || !model.hasBoards)
                 }
             } footer: {
                 Text("Makes every wallpaper again from its original, for example after changing the model or moving to a bigger display. Wallpapers you removed stay removed.")

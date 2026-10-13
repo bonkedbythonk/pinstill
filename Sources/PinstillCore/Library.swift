@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 public enum PinStatus: String, Sendable, Codable {
@@ -20,10 +21,15 @@ public struct PinRecord: Sendable, Codable, Identifiable {
     /// Filename inside the output folder when `status == .done`.
     public var output: String?
     public var processedAt: Date
+    /// Crop the user chose by hand, normalized to the original (0 to 1, origin top-left).
+    /// Redoing the wallpaper keeps it. nil = Pinstill picked the crop.
+    public var crop: CGRect?
 
     public var id: String { pin.id }
 
-    public init(pin: Pin, status: PinStatus, note: String, output: String? = nil, processedAt: Date = .now) {
+    public init(pin: Pin, status: PinStatus, note: String, output: String? = nil, processedAt: Date = .now,
+                crop: CGRect? = nil) {
+        self.crop = crop
         self.pin = pin
         self.status = status
         self.note = note

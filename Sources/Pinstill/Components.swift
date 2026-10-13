@@ -91,6 +91,9 @@ struct WallpaperPrint: View {
             Button("Set as wallpaper") { model.setAsDesktop(wallpaper) }
             Button("Open file") { NSWorkspace.shared.open(wallpaper.url) }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([wallpaper.url]) }
+            if let record = wallpaper.record, record.status == .done {
+                Button("Adjust crop…") { model.presentCropEditor(record, wallpaper.linkID) }
+            }
             if let pin = wallpaper.record?.pin {
                 Button("Open pin on Pinterest") { NSWorkspace.shared.open(pin.pinURL) }
             }
@@ -191,7 +194,7 @@ struct BoardList: View {
                     Button {
                         Task { await model.choose(board) }
                     } label: {
-                        BoardRow(board: board, selected: model.board?.id == board.id)
+                        BoardRow(board: board, selected: model.links.contains { $0.id == board.id })
                     }
                     .buttonStyle(.plain)
                 }

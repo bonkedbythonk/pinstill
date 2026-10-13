@@ -136,7 +136,7 @@ struct SetupView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer()
-                Button("Choose…") { model.chooseOutputFolder() }
+                Button("Choose…") { model.chooseFolder() }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -174,7 +174,7 @@ struct SetupView: View {
         @Bindable var model = model
         return VStack(alignment: .leading, spacing: 18) {
             Rows {
-                Row(label: "Save", text: "Put pins on \(model.board?.name ?? "your board"). Landscape images work best.")
+                Row(label: "Save", text: "Put pins on \(model.links.count == 1 ? model.links[0].board.name : "your boards"). Landscape images work best.")
                 Row(label: "Open", text: "Pinstill checks the board when it starts and each time you click its icon in the menu bar.")
                 Row(label: "Quit", text: "When it's done, if you like. Your Mac keeps rotating the wallpapers.")
             }
@@ -214,7 +214,7 @@ struct SetupView: View {
     private var canContinue: Bool {
         switch step {
         case .pinterest: model.account.username != nil
-        case .board: model.board != nil && model.pendingImport == nil
+        case .board: model.hasBoards && model.pendingImport == nil
         default: true
         }
     }
