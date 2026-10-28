@@ -10,6 +10,14 @@ public enum Screens {
         }
     }
 
+    /// Stable id of a display: survives reconnecting it and restarting the Mac, unlike its index.
+    @MainActor
+    public static func id(of screen: NSScreen) -> String? {
+        guard let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID,
+              let uuid = CGDisplayCreateUUIDFromDisplayID(number)?.takeRetainedValue() else { return nil }
+        return CFUUIDCreateString(nil, uuid) as String
+    }
+
     /// Render target: the connected display with the most pixels (fallback: 14" MacBook Pro).
     @MainActor
     public static func largestPixelSize() -> PixelSize {

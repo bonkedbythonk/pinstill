@@ -196,6 +196,22 @@ final class AppModel {
         didSet { defaults.set(pinnedWallpaper?.path(percentEncoded: false), forKey: "pinnedWallpaper") }
     }
 
+    /// Wallpapers set on one display only, by display id. Those displays stay on their wallpaper
+    /// while the others rotate.
+    private(set) var displayWallpapers: [String: URL] {
+        didSet { store(displayWallpapers.mapValues { $0.path(percentEncoded: false) }, key: "displayWallpapers") }
+    }
+
+    struct Display: Identifiable {
+        let id: String
+        let name: String
+    }
+
+    /// The connected displays.
+    var displays: [Display] {
+        NSScreen.screens.compactMap { screen in Screens.id(of: screen).map { Display(id: $0, name: screen.localizedName) } }
+    }
+
     /// Who rotates the wallpapers: macOS (works with Pinstill closed) or Pinstill (more control,
     /// has to stay open).
     var rotationMode: RotationMode {
@@ -332,6 +348,8 @@ final class AppModel {
         hasCompletedSetup = defaults.bool(forKey: "hasCompletedSetup")
         pinnedWallpaper = defaults.string(forKey: "pinnedWallpaper").map { URL(filePath: $0) }
         awaitingImportDecision = defaults.string(forKey: "awaitingImportDecision")
+        displayWallpapers = (Self.load([String: String].self, key: "displayWallpapers", from: defaults) ?? [:])
+            .mapValues { URL(filePath: $0) }
         rotationMode = Self.load(RotationMode.self, key: "rotationMode", from: defaults) ?? .macOS
         macInterval = Self.load(ShuffleInterval.self, key: "macInterval", from: defaults)
         macRandomly = defaults.object(forKey: "macRandomly") as? Bool
@@ -808,12 +826,18 @@ final class AppModel {
         lastResult = saved ? "Crop saved" : "Couldn't save the crop"
         reloadWallpapers()
         let file = link.folder.appending(path: output)
-        if saved, file == currentWallpaper || file == pinnedWallpaper { show(file) }
+        guard saved else { return }
+        if file == currentWallpaper || file == pinnedWallpaper {
+            show(file)
+        } else {
+            for display in displays where displayWallpapers[display.id] == file { setOnDisplay(file, display) }
+        }
     }
 
     /// Moves a wallpaper to the Trash. Its pin stays "seen", so it isn't downloaded again.
     func trash(_ wallpaper: Wallpaper) {
         if rotationMode == .macOS, wallpaper.url == pinnedWallpaper { resumeRotation() }
+        for id in displayWallpapers.filter({ $0.value == wallpaper.url }).keys { releaseDisplay(id: id) }
         if rotationMode == .pinstill, wallpaper.url == currentWallpaper { nextWallpaper() }
         if isDemo {
             allWallpapers.removeAll { $0.url == wallpaper.url }
@@ -835,6 +859,7 @@ final class AppModel {
     /// Shows one wallpaper right now. In macOS mode that pauses macOS's rotation on the current
     /// desktop until `resumeRotation()`; in Pinstill mode rotation carries on from it.
     func setAsDesktop(_ wallpaper: Wallpaper) {
+        displayWallpapers = [:]
         if rotationMode == .pinstill {
             show(wallpaper.url)
             scheduleRotation()
@@ -848,11 +873,60 @@ final class AppModel {
         }
     }
 
+    /// Whether `url` is showing on any desktop.
+    func isOnDesktop(_ url: URL) -> Bool {
+        desktopWallpaper == url || displayWallpapers.values.contains(url)
+    }
+
+    /// Shows one wallpaper on a single display; the others keep rotating (or keep their own).
+    func setOnDisplay(_ url: URL, _ display: Display) {
+        if isDemo { displayWallpapers[display.id] = url; return }
+        guard let screen = NSScreen.screens.first(where: { Screens.id(of: $0) == display.id }) else { return }
+        do {
+            try NSWorkspace.shared.setDesktopImageURL(url, for: screen, options: [:])
+        } catch {
+            errorMessage = "Couldn't set the wallpaper: \(error.localizedDescription)"
+            return
+        }
+        displayWallpapers[display.id] = url
+        guard rotationMode == .macOS else { return }
+        Task {
+            try? await Task.sleep(for: .seconds(1.5)) // WallpaperAgent writes its store asynchronously
+            await checkStuckDesktops()
+        }
+    }
+
+    /// Lets a display rotate again with the rest.
+    func releaseDisplay(id: String) {
+        displayWallpapers[id] = nil
+        guard !isDemo else { return }
+        if rotationMode == .pinstill {
+            if let currentWallpaper { show(currentWallpaper) }
+            return
+        }
+        guard let screen = NSScreen.screens.first(where: { Screens.id(of: $0) == id }) else { return }
+        try? FileManager.default.createDirectory(at: outputFolder, withIntermediateDirectories: true)
+        do {
+            try NSWorkspace.shared.setDesktopImageURL(outputFolder, for: screen, options: [:])
+        } catch {
+            errorMessage = "Couldn't set the wallpaper folder: \(error.localizedDescription)"
+            return
+        }
+        Task {
+            // Setting a folder resets the interval to 30 minutes; put the chosen one back once
+            // WallpaperAgent has written the folder to its store.
+            try? await Task.sleep(for: .seconds(1.5))
+            if macInterval != nil || macRandomly != nil { await applyMacRotation() }
+            await checkStuckDesktops()
+        }
+    }
+
     /// Puts every desktop showing a single Pinstill wallpaper back on the folder's rotation,
     /// with the chosen interval. Setting the folder through NSWorkspace would only reach the
     /// current desktop and reset the interval to 30 minutes.
     func resumeRotation() {
         pinnedWallpaper = nil
+        displayWallpapers = [:]
         guard !isDemo else { stuckDesktops = 0; return }
         let folders = rotationFolders, interval = macInterval, randomly = macRandomly
         Task {
@@ -873,13 +947,17 @@ final class AppModel {
     func checkStuckDesktops() async {
         guard !isDemo, rotationMode == .macOS else { stuckDesktops = 0; return }
         let folders = rotationFolders
-        stuckDesktops = await Task.detached { folders.reduce(0) { $0 + MacRotation.stuckDesktops(in: $1) } }.value
+        let stuck = await Task.detached { folders.reduce(0) { $0 + MacRotation.stuckDesktops(in: $1) } }.value
+        // Displays the user fixed on one wallpaper on purpose aren't a problem.
+        let chosen = Set(displays.map(\.id)).intersection(displayWallpapers.keys).count
+        stuckDesktops = max(0, stuck - chosen)
     }
 
     /// Point macOS's wallpaper rotation at the output folder on every screen (current Space),
     /// then put back the chosen interval, which setting a folder resets to 30 minutes.
     func useFolderAsDesktopWallpaper() {
         pinnedWallpaper = nil
+        displayWallpapers = [:]
         guard !isDemo else { return }
         try? FileManager.default.createDirectory(at: outputFolder, withIntermediateDirectories: true)
         do {
@@ -985,7 +1063,8 @@ final class AppModel {
         if isDemo { currentWallpaper = url; return true }
         do {
             for screen in NSScreen.screens {
-                try NSWorkspace.shared.setDesktopImageURL(url, for: screen, options: [:])
+                let image = Screens.id(of: screen).flatMap { displayWallpapers[$0] } ?? url
+                try NSWorkspace.shared.setDesktopImageURL(image, for: screen, options: [:])
             }
             if rotationMode == .pinstill { currentWallpaper = url }
             return true

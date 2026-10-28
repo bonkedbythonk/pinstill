@@ -64,7 +64,7 @@ struct WallpaperPrint: View {
     @Environment(AppModel.self) private var model
     @State private var hovering = false
 
-    private var isOnDesktop: Bool { model.desktopWallpaper == wallpaper.url }
+    private var isOnDesktop: Bool { model.isOnDesktop(wallpaper.url) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -89,6 +89,17 @@ struct WallpaperPrint: View {
         .onHover { hovering = $0 }
         .contextMenu {
             Button("Set as wallpaper") { model.setAsDesktop(wallpaper) }
+            if model.displays.count > 1 {
+                Menu("Set as wallpaper on") {
+                    ForEach(model.displays) { display in
+                        Button(display.name) { model.setOnDisplay(wallpaper.url, display) }
+                    }
+                }
+                ForEach(model.displays.filter { model.displayWallpapers[$0.id] != nil }) { display in
+                    Button("Shuffle \(display.name) again") { model.releaseDisplay(id: display.id) }
+                }
+            }
+            Divider()
             Button("Open file") { NSWorkspace.shared.open(wallpaper.url) }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([wallpaper.url]) }
             if let record = wallpaper.record, record.status == .done {
