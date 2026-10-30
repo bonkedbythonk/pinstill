@@ -94,7 +94,7 @@ private struct RotationSettings: View {
     @Environment(AppModel.self) private var model
 
     static let pinstillIntervals: [(String, TimeInterval)] = [
-        ("Every minute", 60), ("Every 5 minutes", 300), ("Every 15 minutes", 900),
+        ("Every minute", 60), ("Every 5 minutes", 300), ("Every 10 minutes", 600), ("Every 15 minutes", 900),
         ("Every 30 minutes", 1800), ("Every hour", 3600), ("Every 3 hours", 10800), ("Every day", 86400),
     ]
 
