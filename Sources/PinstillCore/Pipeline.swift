@@ -81,6 +81,18 @@ public enum Pipeline {
         case rendered(URL, note: String)
     }
 
+    /// `cropping(to:)` shares the parent's ImageIO decode buffer, and CoreImage reads past the end
+    /// of it when wrapping a subimage that touches the right or bottom edge (SIGBUS). Drawing the
+    /// crop into its own bitmap avoids that.
+    static func ownedCrop(_ image: CGImage, to rect: CGRect) -> CGImage? {
+        guard let sub = image.cropping(to: rect),
+              let context = CGContext(data: nil, width: sub.width, height: sub.height, bitsPerComponent: 8,
+                                      bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        context.draw(sub, in: CGRect(x: 0, y: 0, width: sub.width, height: sub.height))
+        return context.makeImage()
+    }
+
     /// Crop `original` to the screen's shape, upscale as needed, render an exact-size JPEG into `work`.
     static func fit(_ original: URL, work: URL, options: PipelineOptions, crop: CGRect? = nil, timer: inout Timer,
                     log: (String) -> Void) async throws -> FitResult {
@@ -107,7 +119,7 @@ public enum Pipeline {
         log(String(format: "crop %dx%d keeps %.0f%%", Int(rect.width), Int(rect.height), kept * 100))
 
         var source = work.appending(path: "cropped.png")
-        guard let croppedImage = image.cropping(to: rect) else {
+        guard let croppedImage = ownedCrop(image, to: rect) else {
             throw CocoaError(.fileWriteUnknown, userInfo: [NSLocalizedDescriptionKey: "Crop failed"])
         }
         try Renderer.writePNG(croppedImage, to: source)
