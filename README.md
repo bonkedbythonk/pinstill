@@ -79,4 +79,4 @@ Scripts/compile_and_run.sh
 
 `swift Scripts/make_icon.swift` redraws the icon. `Pinstill.app/Contents/MacOS/Pinstill --profile test` runs a separate copy with its own settings, login and folder, for trying first run (add `--no-upscayl` to act as if Upscayl isn't installed). `Pinstill.app/Contents/MacOS/Pinstill --snapshot <folder>` renders every screen with made-up data, which is where the screenshots above come from.
 
-Licensed under [GPLv3](LICENSE).
+Copyright (C) 2026 Thomas. Licensed under [GPLv3](LICENSE).
